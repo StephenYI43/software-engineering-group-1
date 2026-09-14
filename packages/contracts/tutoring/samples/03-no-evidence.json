@@ -1,0 +1,17 @@
+{
+  "turnId": "turn_53ea77b1",
+  "sessionId": "sess_4b8d1e02",
+  "stage": "thought",
+  "content": "这个问题我在当前课程的课件里没有找到相关依据，所以我不给你一个可能不准确的结论。\n\n我检索的范围是这门高等数学课程的已授权课件，其中没有覆盖到这个主题。你可以：\n\n1. 换一种问法，或者确认一下这个知识点是否属于本课程范围；\n2. 如果你是想要延伸学习，我可以基于课程内已讲过的相关概念（比如导数的定义）帮你梳理思路，但那属于课程外的延伸，我会明确标注。\n\n你希望我怎么做？",
+  "citations": [],
+  "hasEvidence": false,
+  "followUps": [
+    "那这门课里和它最接近的知识点是什么？",
+    "帮我看看本课程大纲里有哪些相关章节"
+  ],
+  "emotion": "neutral",
+  "action": "idle",
+  "isMock": true,
+  "promptVersion": "guided-tutoring.v1",
+  "createdAt": "2026-09-14T08:12:00Z"
+}

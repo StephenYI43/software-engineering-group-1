@@ -1,0 +1,32 @@
+{
+  "turnId": "turn_2c81b5d4",
+  "sessionId": "sess_4b8d1e02",
+  "stage": "summary",
+  "content": "你答对了关键的一点：ε 是先给定的，δ 是随之确定的。这正是这个定义的核心。\n\n把完整逻辑串起来：\n\n1. 任意给定一个正数 ε，它就划定了「离 L 多近」的标准。\n2. 我们要找到正数 δ，使得 x 落在 a 的去心 δ 邻域内时，f(x) 一定落在 L 的 ε 邻域内。\n3. δ 的取法可以依赖 ε，但一旦 ε 给定，δ 就随之确定。\n\n所以要检验极限，就是回答这个问题：「给定这个 ε，我能找到对应的 δ 吗？」\n\n需要注意的边界：条件是 0 < |x - a| < δ，那个「0 <」意味着 x = a 这一点本身不参与讨论——函数在 a 点有没有定义、取值多少，都不影响极限。这一点初学时最容易忽略。",
+  "citations": [
+    {
+      "citationId": "c1",
+      "documentId": "doc_9a2f4c",
+      "documentTitle": "高等数学-上册-第1章.pdf",
+      "pageNumber": 12,
+      "snippet": "设函数 f(x) 在点 a 的某个去心邻域内有定义。如果存在常数 L，使得对于任意给定的正数 ε，总存在正数 δ，当 0 < |x - a| < δ 时，有 |f(x) - L| < ε，则称 L 为函数 f(x) 当 x→a 时的极限。"
+    },
+    {
+      "citationId": "c2",
+      "documentId": "doc_9a2f4c",
+      "documentTitle": "高等数学-上册-第1章.pdf",
+      "pageNumber": 14,
+      "snippet": "注意定义中的条件 0 < |x - a| < δ 表示 x ≠ a，即函数在点 a 处是否有定义与极限是否存在无关。"
+    }
+  ],
+  "hasEvidence": true,
+  "followUps": [
+    "用这个定义证明 lim(x→2)(2x+1)=5",
+    "如果改成 0 < |x - a| < δ 去掉那个「0 <」，会有什么问题？"
+  ],
+  "emotion": "celebrating",
+  "action": "point",
+  "isMock": true,
+  "promptVersion": "guided-tutoring.v1",
+  "createdAt": "2026-09-14T08:05:30Z"
+}
