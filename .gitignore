@@ -12,3 +12,7 @@ __pycache__/
 *.log
 uploads/
 .local/
+.coverage
+.coverage.*
+.mypy_cache/
+htmlcov/
