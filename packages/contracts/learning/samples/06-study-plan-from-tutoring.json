@@ -1,0 +1,84 @@
+{
+  "_note": "M3 导学建议 → M5 保存场景：前端只发 sourceTurnId，M5 service 层按 turnId 调用 M3 取用接口拉取 planSuggestion 后持久化。前端不传 items，避免客户端改写建议内容（docs/code-standards.md:95）。",
+  "request_POST_study-plans_tutoring": {
+    "_note": "前端只发这些字段；不得包含 items。title 由 M3 planSuggestion 提供，courseId/dueAt 可由学生覆盖",
+    "source": "tutoring",
+    "sourceTurnId": "turn_7f3a9c21",
+    "courseId": "course_b3f1c2d4",
+    "dueAt": "2026-09-22T23:59:00Z"
+  },
+  "m3_planSuggestion_fetched_by_m5": {
+    "_note": "M5 service 层按 sourceTurnId 调用 M3 取用接口拿到。M3 对不存在或不归属的 turnId 返回 404 防枚举。M5 持久化层字段 id/studentId/status 不在此对象中。",
+    "title": "极限与连续 复习计划",
+    "items": [
+      {
+        "content": "重做错题：求 lim(x→0) sin(x)/x",
+        "chapterId": "chapter_2c9e1a",
+        "knowledgePoint": "等价无穷小",
+        "suggestedDueAt": "2026-09-18T23:59:00Z"
+      },
+      {
+        "content": "复习 ε-δ 定义并整理笔记",
+        "chapterId": "chapter_2c9e1a",
+        "knowledgePoint": "ε-δ 定义",
+        "suggestedDueAt": "2026-09-20T23:59:00Z"
+      }
+    ],
+    "suggestedPlanDueAt": "2026-09-22T23:59:00Z"
+  },
+  "response_201_study_plan": {
+    "_note": "M5 持久化后的完整对象。id/studentId/status/items[].id 由 M5 生成；items 从 planSuggestion 映射：content→content, suggestedDueAt→dueAt, chapterId 就高取非空值",
+    "id": "plan_6d8a3c",
+    "studentId": "user_b8c1d2",
+    "title": "极限与连续 复习计划",
+    "courseId": "course_b3f1c2d4",
+    "chapterId": "chapter_2c9e1a",
+    "source": "tutoring",
+    "sourceTurnId": "turn_7f3a9c21",
+    "status": "active",
+    "items": [
+      {
+        "id": "plan_item_3a1b2c",
+        "planId": "plan_6d8a3c",
+        "content": "重做错题：求 lim(x→0) sin(x)/x",
+        "order": 1,
+        "status": "pending",
+        "dueAt": "2026-09-18T23:59:00Z",
+        "relatedMistakeId": null,
+        "relatedAssignmentId": null,
+        "createdAt": "2026-09-15T15:30:00Z",
+        "updatedAt": "2026-09-15T15:30:00Z"
+      },
+      {
+        "id": "plan_item_4b2c3d",
+        "planId": "plan_6d8a3c",
+        "content": "复习 ε-δ 定义并整理笔记",
+        "order": 2,
+        "status": "pending",
+        "dueAt": "2026-09-20T23:59:00Z",
+        "relatedMistakeId": null,
+        "relatedAssignmentId": null,
+        "createdAt": "2026-09-15T15:30:00Z",
+        "updatedAt": "2026-09-15T15:30:00Z"
+      }
+    ],
+    "dueAt": "2026-09-22T23:59:00Z",
+    "createdAt": "2026-09-15T15:30:00Z",
+    "updatedAt": "2026-09-15T15:30:00Z"
+  },
+  "learningEvent_study_plan_saved": {
+    "_note": "事务提交后写入 learning_events 表，与业务写入同事务",
+    "eventId": "event_7d3a1f",
+    "eventType": "study_plan_saved",
+    "userId": "user_b8c1d2",
+    "courseId": "course_b3f1c2d4",
+    "occurredAt": "2026-09-15T15:30:00Z",
+    "traceId": "req_9e2b4d11",
+    "schemaVersion": "1.0",
+    "payload": {
+      "planId": "plan_6d8a3c",
+      "source": "tutoring",
+      "itemsCount": 2
+    }
+  }
+}

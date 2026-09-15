@@ -1,0 +1,104 @@
+{
+  "_note": "多种学习事件样例，供 M6 消费对照。事件只追加不修改（append-only）；幂等命中已有记录时不重复发布；eventId 全局唯一由 M5 服务端生成，不接受客户端传入。",
+  "events": [
+    {
+      "eventId": "event_3f8a2c",
+      "eventType": "assignment_submitted",
+      "userId": "user_b8c1d2",
+      "courseId": "course_b3f1c2d4",
+      "occurredAt": "2026-09-15T14:32:00Z",
+      "traceId": "req_8d1f0c33",
+      "schemaVersion": "1.0",
+      "payload": {
+        "submissionId": "submission_7a3c1d",
+        "assignmentId": "assignment_4d8e2b",
+        "questionType": "single_choice",
+        "isCorrect": true,
+        "score": 10
+      }
+    },
+    {
+      "eventId": "event_4a9b3d",
+      "eventType": "assignment_graded",
+      "userId": "user_b8c1d2",
+      "courseId": "course_b3f1c2d4",
+      "occurredAt": "2026-09-16T10:15:00Z",
+      "traceId": "req_a1b2c3d4",
+      "schemaVersion": "1.0",
+      "payload": {
+        "submissionId": "submission_8b4d2e",
+        "isCorrect": true,
+        "score": 18
+      }
+    },
+    {
+      "eventId": "event_5b9c1e",
+      "eventType": "mistake_recorded",
+      "userId": "user_b8c1d2",
+      "courseId": "course_b3f1c2d4",
+      "occurredAt": "2026-09-15T14:35:00Z",
+      "traceId": "req_8d1f0c33",
+      "schemaVersion": "1.0",
+      "payload": {
+        "mistakeId": "mistake_9c4b2e",
+        "source": "wrong_submission",
+        "assignmentId": "assignment_4d8e2b",
+        "chapterId": "chapter_2c9e1a"
+      }
+    },
+    {
+      "eventId": "event_6c1d2f",
+      "eventType": "mistake_resolved",
+      "userId": "user_b8c1d2",
+      "courseId": "course_b3f1c2d4",
+      "occurredAt": "2026-09-18T20:00:00Z",
+      "traceId": "req_b2c3d4e5",
+      "schemaVersion": "1.0",
+      "payload": {
+        "mistakeId": "mistake_9c4b2e"
+      }
+    },
+    {
+      "eventId": "event_7d3a1f",
+      "eventType": "study_plan_saved",
+      "userId": "user_b8c1d2",
+      "courseId": "course_b3f1c2d4",
+      "occurredAt": "2026-09-15T15:30:00Z",
+      "traceId": "req_9e2b4d11",
+      "schemaVersion": "1.0",
+      "payload": {
+        "planId": "plan_6d8a3c",
+        "source": "tutoring",
+        "itemsCount": 2
+      }
+    },
+    {
+      "eventId": "event_8e4b2a",
+      "eventType": "plan_item_completed",
+      "userId": "user_b8c1d2",
+      "courseId": "course_b3f1c2d4",
+      "occurredAt": "2026-09-18T21:00:00Z",
+      "traceId": "req_c3d4e5f6",
+      "schemaVersion": "1.0",
+      "payload": {
+        "planId": "plan_6d8a3c",
+        "itemId": "plan_item_3a1b2c"
+      }
+    },
+    {
+      "eventId": "event_9f5c3b",
+      "eventType": "reminder_triggered",
+      "userId": "user_b8c1d2",
+      "courseId": "course_b3f1c2d4",
+      "occurredAt": "2026-09-18T08:00:00Z",
+      "traceId": "req_d4e5f6a7",
+      "schemaVersion": "1.0",
+      "payload": {
+        "reminderId": "reminder_5e8d2a",
+        "type": "plan_due",
+        "dueAt": "2026-09-18T23:59:00Z"
+      }
+    }
+  ],
+  "_note_chapter_viewed": "chapter_viewed 事件由 M2 发布（前端行为事件），M5 不实现这条。M2 的发布 schema 由 M2 单独定义并交 M6 评审，不在本样例中。"
+}
