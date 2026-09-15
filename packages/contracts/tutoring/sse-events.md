@@ -6,10 +6,17 @@
 传输：`text/event-stream`，事件格式为标准 SSE `event:` + `data:` 行。
 每个 `data:` 是**单行 JSON**，字段为 camelCase。
 
-> 待 M2 确认：使用 `fetch` + ReadableStream 还是 `EventSource`。
-> 注意 `EventSource` 只支持 GET，而本接口需要 POST 携带请求体。
-> 若 M2 需要携带 Authorization 头，则必须使用 `fetch` 方案。
-> 这个选择会影响前端实现，请在契约评审时确认。
+**传输方式已确认（M2，2026-09-15）：`fetch` + `ReadableStream`，不使用 `EventSource`。**
+
+本接口需 POST 携带 JSON 请求体，且需携带 `Authorization` 头；
+`EventSource` 只支持 GET、无法携带自定义请求头，**两个必要条件都不满足**，无选择余地。
+
+由此产生的前端实现责任（由 M2 承担，记录在案）：
+
+- 自行实现 SSE 帧解析：按空行切帧、解析 `event:` / `data:` 行、处理跨 chunk 的半截帧；
+- 自行校验 `seq` 单调递增，跳号或重复视为协议错误；
+- **不使用 `AbortController` 实现「停止」按钮** —— 原因见「停止行为」中
+  `client_stop` 与 `client_disconnect` 的区分。
 
 ## 事件序列
 
@@ -132,6 +139,18 @@ started  →  delta × N  →  completed        （正常完成）
 `error` 与 `stopped` 的区别：`stopped` 是**用户意图**，`error` 是**系统失败**。
 两者都 `isComplete = false`，但前端提示文案与重试策略不同。
 
+### `error` 时教学阶段同样不推进
+
+与 `stopped` 一致。理由相同：失败的轮次没有产生可用的教学结果，
+半截文本不能让学生跳过当前阶段（对照上文 `stopped` 的处理）。
+
+因此**前端在重试产生新轮后不需要重置阶段指示器**——它从未推进。
+新轮的 `stage` 由服务端状态机在**同一个未推进的状态**上重算。
+
+一点边界：`stage` 的**推进算法**不在本契约范围内（`tutoring-response.md:98`
+「推进规则由服务端状态机决定，本契约只定义取值」）。
+此处确定的是**不变量**：失败轮（`stopped` / `error`）一律不推进。
+
 ## 停止行为
 
 `POST /api/v1/tutoring/sessions/{sessionId}/turns/{turnId}/stop`
@@ -139,6 +158,23 @@ started  →  delta × N  →  completed        （正常完成）
 - 幂等：对同一轮重复调用返回相同结果，不会产生第二个终止事件
 - 停止后服务端关闭上游模型流（不继续计费）
 - 已发出的事件保留有效，前端据 `stopped` 收尾
+- **服务端在发起上游取消后立即下发 `stopped`，不等供应商确认关闭。**
+  这是前端兜底超时不会被误触发的前提。
+
+### 前端侧约定（M2，2026-09-15）
+
+- 用户点停止 → 调本接口 → **保持 SSE 连接打开**，继续读取直到收到 `stopped` 终止事件，
+  收到后收尾并关闭连接；
+- **兜底超时为 5 秒**（双方共同约定）。超时仍未收到终止事件才 `abort()`，
+  并按「结果未知」提示，**不得**把已收到的半截文本展示为完成结果。
+
+### 为什么停止不能靠 `AbortController` 实现
+
+`reason` 的取值 `client_stop` 与 `client_disconnect` 区分的是**用户意图**与**连接断开**。
+前端若用 `AbortController.abort()` 实现停止按钮，服务端观察到的是连接断开，
+会被记为 `client_disconnect`，而不是用户意图的 `client_stop`，语义丢失。
+
+因此停止必须走本接口；`abort()` 只作为兜底超时后的最后手段。
 
 ## 断连行为
 
@@ -151,7 +187,8 @@ started  →  delta × N  →  completed        （正常完成）
 S1 **只支持整轮重试，不支持断点续传**。前端拿到半截内容后如需继续，应重新发起一轮提问。
 `seq` 的设计为将来可能的续传留出了扩展空间（可用 `Last-Event-ID`），但 S1 不实现。
 
-> 此点需 M2 确认，因为它直接影响聊天界面的交互设计。
+> **已由 M2 确认（2026-09-15）。** 前端在 `stopped` / `error` 后的交互是
+> 「重新发起一轮提问」，不做续传 UI。
 
 ## 隐私
 
