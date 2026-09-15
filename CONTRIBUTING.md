@@ -40,7 +40,7 @@ type 为 feat/fix/docs/refactor/test/style/perf/build/ci/chore；scope 使用实
 
 验收标准全部通过、相关测试通过、文档与契约同步、PR 已审核合并、集成演示验证后才算完成。“已写代码”“已合并”都不是单独完成条件。
 
-main 保护、必需 CI、CODEOWNERS 自动评审和自动部署是 M1 的工程任务，本文不表示它们已启用；拿到成员账号后再建立真实 CODEOWNERS 映射，不填虚构账号。首批规范文档同样通过 PR 供团队评审。
+main 保护、必需 CI 和自动部署是 M1 的工程任务，本文不表示它们已启用。CODEOWNERS 已写入真实账号映射，合并至 PR 的目标分支后生效；CODEOWNERS 本身不等于分支保护，也不会强制两名评审人。规范文档同样通过 PR 供团队评审。
 
 ## 看板与及时反馈
 

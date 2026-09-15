@@ -1,6 +1,17 @@
 # 六人分工与交付计划
 
-项目：大学生辅助学习 AI 数字人系统。M1—M6 为角色占位，尚未对应实际姓名或 GitHub 账号；任务卡创建不等于已授权协作者。每人对自己模块的前后端接口、测试与文档负责。
+项目：大学生辅助学习 AI 数字人系统。以下账号分工由组长于 2026-09-15 确认，六人均已具有仓库写入权限，模块任务已设置对应 Assignee。每人对自己模块的接口、测试与文档负责。
+
+## GitHub 账号映射
+
+| 角色 | GitHub 账号 | 模块任务 | 交叉评审人 |
+| --- | --- | --- | --- |
+| M1 | @StephenYI43 | [#2](https://github.com/StephenYI43/software-engineering-group-1/issues/2) | @xk1024 |
+| M2 | @Saber-www | [#3](https://github.com/StephenYI43/software-engineering-group-1/issues/3) | @haoxuanluo351-lgtm |
+| M3 | @ljt2293977194-dotcom | [#4](https://github.com/StephenYI43/software-engineering-group-1/issues/4) | @Jiege123-CMYK |
+| M4 | @haoxuanluo351-lgtm | [#5](https://github.com/StephenYI43/software-engineering-group-1/issues/5) | @Saber-www |
+| M5 | @Jiege123-CMYK | [#6](https://github.com/StephenYI43/software-engineering-group-1/issues/6) | @ljt2293977194-dotcom |
+| M6 | @xk1024 | [#7](https://github.com/StephenYI43/software-engineering-group-1/issues/7) | @StephenYI43 |
 
 ## 职责与边界
 
@@ -53,7 +64,7 @@ M2 负责页面布局与数据展示，M4 提供独立数字人组件；M6 自�
 
 ## 首日开工
 
-1. 六人选择角色，组长将账号写入本表并为任务指定 Assignee。
+1. 账号和模块任务 Assignee 已配置；每人核对本表后在自己的 Issue 更新首次工作计划。
 2. 阅读 CONTRIBUTING、代码规范与 AGENTS；AI 开发工具不自动读取 AGENTS 时手工附上。
 3. 各自把模块任务拆成 0.5—2 天的小 Issue，声明受影响目录。
 4. M1/M3/M4/M5/M6 共同确认接口样例；M2/M6 可以基于明确标记的 Mock 并行开发。

@@ -14,7 +14,7 @@
 - [成员任务卡](docs/tasks/index.md)
 - [项目看板](https://github.com/users/StephenYI43/projects/5)
 
-成员暂用 M1—M6，占位不表示已完成 GitHub 人员指派。实际成员账号确定后，在分工表与 Issue 中补齐。
+成员分工已确认并指派到 Issue：M1 @StephenYI43、M2 @Saber-www、M3 @ljt2293977194-dotcom、M4 @haoxuanluo351-lgtm、M5 @Jiege123-CMYK、M6 @xk1024。详见六人分工表。
 
 ## 协作原则
 

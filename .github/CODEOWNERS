@@ -1,0 +1,24 @@
+# Last matching pattern wins. Ownership requests do not enforce approvals.
+* @StephenYI43
+/apps/web/ @Saber-www
+/apps/web/src/features/teacher/ @xk1024
+/packages/ui/ @Saber-www
+/packages/avatar/ @haoxuanluo351-lgtm
+/apps/api/ @StephenYI43
+/apps/api/app/domains/tutoring/ @ljt2293977194-dotcom
+/apps/api/app/domains/knowledge/ @ljt2293977194-dotcom
+/apps/api/app/domains/media/ @haoxuanluo351-lgtm
+/apps/api/app/domains/learning/ @Jiege123-CMYK
+/apps/api/app/domains/analytics/ @xk1024
+/apps/api/migrations/ @Jiege123-CMYK
+/ai/ @ljt2293977194-dotcom
+/packages/contracts/ @StephenYI43
+/packages/contracts/tutoring/ @ljt2293977194-dotcom @Saber-www @haoxuanluo351-lgtm @Jiege123-CMYK
+/infra/ @StephenYI43
+/.github/ @StephenYI43
+/docs/tasks/m1.md @StephenYI43
+/docs/tasks/m2.md @Saber-www
+/docs/tasks/m3.md @ljt2293977194-dotcom
+/docs/tasks/m4.md @haoxuanluo351-lgtm
+/docs/tasks/m5.md @Jiege123-CMYK
+/docs/tasks/m6.md @xk1024
