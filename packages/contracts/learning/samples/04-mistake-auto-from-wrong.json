@@ -1,0 +1,55 @@
+{
+  "_note": "错答自动收录场景：单选题提交被判 isCorrect=false，服务端在 isCorrect: null→false 翻转时自动写入错题本并发布学习事件。客户端不可直接 POST source=wrong_submission（服务端校验拒绝）。",
+  "submissionResponse_200_wrong": {
+    "_note": "客观题提交后立即自动判分 gradedBy=auto",
+    "id": "submission_9a2c1f",
+    "assignmentId": "assignment_4d8e2b",
+    "studentId": "user_b8c1d2",
+    "answer": { "options": ["A"] },
+    "isCorrect": false,
+    "score": 0,
+    "gradedAt": "2026-09-15T14:35:00Z",
+    "gradedBy": "auto",
+    "idempotencyKey": "idem_c3d4e5f6a7b8c9d0",
+    "submittedAt": "2026-09-15T14:35:00Z",
+    "createdAt": "2026-09-15T14:35:00Z"
+  },
+  "mistake_auto_recorded": {
+    "_note": "服务端在判分翻转时写入；source=wrong_submission；question 是收录时刻快照，后续教师修订题面不影响此记录",
+    "id": "mistake_9c4b2e",
+    "studentId": "user_b8c1d2",
+    "courseId": "course_b3f1c2d4",
+    "chapterId": "chapter_2c9e1a",
+    "assignmentId": "assignment_4d8e2b",
+    "submissionId": "submission_9a2c1f",
+    "sourceTurnId": null,
+    "source": "wrong_submission",
+    "question": {
+      "stem": "设 f(x)=x²，求 f'(1)。",
+      "questionType": "single_choice",
+      "options": ["A. 1", "B. 2", "C. 0", "D. -1"],
+      "attachmentUrl": null
+    },
+    "studentAnswer": { "options": ["A"] },
+    "note": null,
+    "status": "active",
+    "createdAt": "2026-09-15T14:35:00Z",
+    "updatedAt": "2026-09-15T14:35:00Z"
+  },
+  "learningEvent_mistake_recorded": {
+    "_note": "首次收录才发布事件；幂等命中已有 active 记录时不发布（避免 M6 重复计数）",
+    "eventId": "event_5b9c1e",
+    "eventType": "mistake_recorded",
+    "userId": "user_b8c1d2",
+    "courseId": "course_b3f1c2d4",
+    "occurredAt": "2026-09-15T14:35:00Z",
+    "traceId": "req_8d1f0c33",
+    "schemaVersion": "1.0",
+    "payload": {
+      "mistakeId": "mistake_9c4b2e",
+      "source": "wrong_submission",
+      "assignmentId": "assignment_4d8e2b",
+      "chapterId": "chapter_2c9e1a"
+    }
+  }
+}

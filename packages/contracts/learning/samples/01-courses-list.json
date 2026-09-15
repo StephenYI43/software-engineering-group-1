@@ -1,0 +1,75 @@
+{
+  "coursesListResponse": {
+    "items": [
+      {
+        "id": "course_b3f1c2d4",
+        "title": "高等数学（上）",
+        "description": "极限、连续、一元微积分",
+        "subject": "math",
+        "coverImageUrl": null,
+        "teacherId": "user_9a2f4c",
+        "teacherName": "王老师",
+        "studentCount": 32,
+        "chapterCount": 12,
+        "createdAt": "2026-09-10T08:00:00Z",
+        "updatedAt": "2026-09-14T10:30:00Z"
+      },
+      {
+        "id": "course_c1a0f3e8",
+        "title": "线性代数",
+        "description": "行列式、矩阵、向量空间",
+        "subject": "math",
+        "coverImageUrl": null,
+        "teacherId": "user_9a2f4c",
+        "teacherName": "王老师",
+        "studentCount": 28,
+        "chapterCount": 8,
+        "createdAt": "2026-09-10T08:10:00Z",
+        "updatedAt": "2026-09-12T09:00:00Z"
+      }
+    ],
+    "total": 2,
+    "page": 1,
+    "pageSize": 20
+  },
+  "chaptersListResponse": {
+    "items": [
+      {
+        "id": "chapter_2c9e1a",
+        "courseId": "course_b3f1c2d4",
+        "title": "第一章 极限与连续",
+        "order": 1,
+        "description": "数列极限、函数极限、连续性",
+        "documentId": "doc_9a2f4c",
+        "createdAt": "2026-09-10T08:05:00Z",
+        "updatedAt": "2026-09-10T08:05:00Z"
+      },
+      {
+        "id": "chapter_3d0f2b",
+        "courseId": "course_b3f1c2d4",
+        "title": "第二章 导数与微分",
+        "order": 2,
+        "description": "导数定义、求导法则、微分",
+        "documentId": "doc_a1b2c3",
+        "createdAt": "2026-09-10T08:06:00Z",
+        "updatedAt": "2026-09-10T08:06:00Z"
+      }
+    ],
+    "total": 2,
+    "page": 1,
+    "pageSize": 100
+  },
+  "courseDetailResponse": {
+    "id": "course_b3f1c2d4",
+    "title": "高等数学（上）",
+    "description": "极限、连续、一元微积分",
+    "subject": "math",
+    "coverImageUrl": null,
+    "teacherId": "user_9a2f4c",
+    "teacherName": "王老师",
+    "studentCount": null,
+    "chapterCount": null,
+    "createdAt": "2026-09-10T08:00:00Z",
+    "updatedAt": "2026-09-14T10:30:00Z"
+  }
+}

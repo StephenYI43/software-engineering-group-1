@@ -1,0 +1,67 @@
+{
+  "assignmentStudentView": {
+    "id": "assignment_4d8e2b",
+    "courseId": "course_b3f1c2d4",
+    "chapterId": "chapter_2c9e1a",
+    "title": "习题 1.2 极限计算",
+    "description": "求下列极限，写出主要步骤。",
+    "questionType": "single_choice",
+    "maxScore": 10,
+    "dueAt": "2026-09-22T23:59:00Z",
+    "publishedAt": "2026-09-14T10:30:00Z",
+    "teacherId": "user_9a2f4c",
+    "createdAt": "2026-09-14T10:30:00Z",
+    "updatedAt": "2026-09-14T10:30:00Z",
+    "_note": "answerKey 字段在学生视角下不存在（不是 null），见 homework.md 不变量 1"
+  },
+  "assignmentTeacherView": {
+    "id": "assignment_4d8e2b",
+    "courseId": "course_b3f1c2d4",
+    "chapterId": "chapter_2c9e1a",
+    "title": "习题 1.2 极限计算",
+    "description": "求下列极限，写出主要步骤。",
+    "questionType": "single_choice",
+    "answerKey": {
+      "options": ["B"]
+    },
+    "maxScore": 10,
+    "dueAt": "2026-09-22T23:59:00Z",
+    "publishedAt": "2026-09-14T10:30:00Z",
+    "teacherId": "user_9a2f4c",
+    "createdAt": "2026-09-14T10:30:00Z",
+    "updatedAt": "2026-09-14T10:30:00Z"
+  },
+  "submissionRequest": {
+    "answer": {
+      "options": ["B"]
+    },
+    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a"
+  },
+  "submissionResponse_201_firstTime": {
+    "id": "submission_7a3c1d",
+    "assignmentId": "assignment_4d8e2b",
+    "studentId": "user_b8c1d2",
+    "answer": { "options": ["B"] },
+    "isCorrect": true,
+    "score": 10,
+    "gradedAt": "2026-09-15T14:32:00Z",
+    "gradedBy": "auto",
+    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a",
+    "submittedAt": "2026-09-15T14:32:00Z",
+    "createdAt": "2026-09-15T14:32:00Z"
+  },
+  "submissionResponse_200_idempotentRetry": {
+    "_note": "客户端用相同 idempotencyKey 重试时，返回首次创建的对象，HTTP 200 而非 201",
+    "id": "submission_7a3c1d",
+    "assignmentId": "assignment_4d8e2b",
+    "studentId": "user_b8c1d2",
+    "answer": { "options": ["B"] },
+    "isCorrect": true,
+    "score": 10,
+    "gradedAt": "2026-09-15T14:32:00Z",
+    "gradedBy": "auto",
+    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a",
+    "submittedAt": "2026-09-15T14:32:00Z",
+    "createdAt": "2026-09-15T14:32:00Z"
+  }
+}

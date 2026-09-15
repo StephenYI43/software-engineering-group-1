@@ -1,0 +1,60 @@
+{
+  "assignmentStudentView": {
+    "id": "assignment_5e9f3a",
+    "courseId": "course_b3f1c2d4",
+    "chapterId": "chapter_2c9e1a",
+    "title": "证明题：极限的 ε-δ 定义",
+    "description": "用 ε-δ 定义证明 lim(x→2)(3x+1)=7，写出完整证明过程。",
+    "questionType": "proof",
+    "maxScore": 20,
+    "dueAt": "2026-09-22T23:59:00Z",
+    "publishedAt": "2026-09-14T10:30:00Z",
+    "teacherId": "user_9a2f4c",
+    "createdAt": "2026-09-14T10:30:00Z",
+    "updatedAt": "2026-09-14T10:30:00Z",
+    "_note": "proof 题无 answerKey；学生视角也不返回 answerKey 字段"
+  },
+  "submissionRequest": {
+    "answer": {
+      "text": "设 ε>0 任给。要使 |3x+1-7|<ε，即 |3x-6|<ε，|x-2|<ε/3。取 δ=ε/3，则当 0<|x-2|<δ 时，有 |(3x+1)-7|=3|x-2|<3δ=ε。证毕。"
+    },
+    "idempotencyKey": "idem_a1b2c3d4e5f6a7b8"
+  },
+  "submissionResponse_201_pendingGrading": {
+    "_note": "proof 题提交后 isCorrect/score 为 null，待教师批阅填充",
+    "id": "submission_8b4d2e",
+    "assignmentId": "assignment_5e9f3a",
+    "studentId": "user_b8c1d2",
+    "answer": {
+      "text": "设 ε>0 任给。要使 |3x+1-7|<ε，即 |3x-6|<ε，|x-2|<ε/3。取 δ=ε/3，则当 0<|x-2|<δ 时，有 |(3x+1)-7|=3|x-2|<3δ=ε。证毕。"
+    },
+    "isCorrect": null,
+    "score": null,
+    "gradedAt": null,
+    "gradedBy": "auto",
+    "idempotencyKey": "idem_a1b2c3d4e5f6a7b8",
+    "submittedAt": "2026-09-15T16:00:00Z",
+    "createdAt": "2026-09-15T16:00:00Z"
+  },
+  "gradingPatchRequest_teacher": {
+    "_note": "教师批阅端点 PATCH /api/v1/submissions/{id}/grading",
+    "isCorrect": true,
+    "score": 18,
+    "gradedBy": "teacher"
+  },
+  "submissionResponse_200_afterGrading": {
+    "id": "submission_8b4d2e",
+    "assignmentId": "assignment_5e9f3a",
+    "studentId": "user_b8c1d2",
+    "answer": {
+      "text": "设 ε>0 任给。要使 |3x+1-7|<ε，即 |3x-6|<ε，|x-2|<ε/3。取 δ=ε/3，则当 0<|x-2|<δ 时，有 |(3x+1)-7|=3|x-2|<3δ=ε。证毕。"
+    },
+    "isCorrect": true,
+    "score": 18,
+    "gradedAt": "2026-09-16T10:15:00Z",
+    "gradedBy": "teacher",
+    "idempotencyKey": "idem_a1b2c3d4e5f6a7b8",
+    "submittedAt": "2026-09-15T16:00:00Z",
+    "createdAt": "2026-09-15T16:00:00Z"
+  }
+}
