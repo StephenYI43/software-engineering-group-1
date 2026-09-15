@@ -1,0 +1,10 @@
+{
+  "code": "MODEL_OUTPUT_INVALID",
+  "message": "模型输出无法通过结构校验，请重试",
+  "requestId": "req_8d1f0c33",
+  "details": {
+    "turnId": "turn_9b2e4410",
+    "attempts": 2,
+    "reason": "response_envelope_parse_failed"
+  }
+}

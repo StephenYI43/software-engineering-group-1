@@ -1,0 +1,62 @@
+# SSE 事件流样例（示意）
+
+对应 sse-events.md。仅列出关键事件，中间的 `delta` 已省略（用 `...` 表示）。
+
+## 变体一：正常完成
+
+```text
+event: started
+data: {"seq":1,"turnId":"turn_7f3a9c21","stage":"thought","isMock":true}
+
+event: delta
+data: {"seq":2,"turnId":"turn_7f3a9c21","textDelta":"我们先不急着写出定义。"}
+
+event: delta
+data: {"seq":3,"turnId":"turn_7f3a9c21","textDelta":"你想一想，说「当 x 靠近 a 时"}
+
+...
+
+event: delta
+data: {"seq":8,"turnId":"turn_7f3a9c21","textDelta":"你先说说看，在这个定义里，应该先给定哪一个量？"}
+
+event: completed
+data: {"seq":9,"turnId":"turn_7f3a9c21","isComplete":true,"response":{"turnId":"turn_7f3a9c21","sessionId":"sess_4b8d1e02","stage":"thought","content":"（完整文本，即以上 delta 拼接结果）","citations":[{"citationId":"c1","documentId":"doc_9a2f4c","documentTitle":"高等数学-上册-第1章.pdf","pageNumber":12,"snippet":"设函数 f(x) 在点 a 的某个去心邻域内有定义……"}],"hasEvidence":true,"followUps":["那 ε 和 δ 哪个是先给定的？"],"emotion":"encouraging","action":"nod","isMock":true,"promptVersion":"guided-tutoring.v1","createdAt":"2026-09-14T08:00:00Z"}}
+```
+
+要点：`seq` 从 1 连续递增到 9，`completed` 序号最大且唯一；
+结构化字段（citations / followUps / emotion / action）只在最后一个事件出现。
+
+## 变体二：用户中断
+
+```text
+event: started
+data: {"seq":1,"turnId":"turn_7f3a9c21","stage":"thought","isMock":true}
+
+event: delta
+data: {"seq":2,"turnId":"turn_7f3a9c21","textDelta":"我们先不急着写出定义。"}
+
+event: delta
+data: {"seq":3,"turnId":"turn_7f3a9c21","textDelta":"你想一想，"}
+
+event: stopped
+data: {"seq":4,"turnId":"turn_7f3a9c21","isComplete":false,"reason":"client_stop"}
+```
+
+要点：`stopped` 是终止事件，`seq=4`；**没有** `completed`。
+该轮持久化为 `aborted`，**教学阶段不推进**——下一轮仍从 `thought` 继续。
+
+## 变体三：模型输出校验失败
+
+```text
+event: started
+data: {"seq":1,"turnId":"turn_9b2e4410","stage":"thought","isMock":false}
+
+event: delta
+data: {"seq":2,"turnId":"turn_9b2e4410","textDelta":"（部分文本）"}
+
+event: error
+data: {"seq":3,"turnId":"turn_9b2e4410","isComplete":false,"error":{"code":"MODEL_OUTPUT_INVALID","message":"模型输出无法通过结构校验，请重试","requestId":"req_8d1f0c33","details":{"turnId":"turn_9b2e4410","attempts":2,"reason":"response_envelope_parse_failed"}}}
+```
+
+要点：已经发出的 `delta` 仍然有效，但该轮**不算完成**。
+前端应提示重试，**不得**把已收到的半截文本当作回答展示为最终结果。

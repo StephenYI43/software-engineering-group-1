@@ -1,0 +1,25 @@
+{
+  "turnId": "turn_7f3a9c21",
+  "sessionId": "sess_4b8d1e02",
+  "stage": "thought",
+  "content": "我们先不急着写出定义。你想一想，说「当 x 靠近 a 时 f(x) 趋近 L」，这里的「靠近」是一种动态描述——那我怎么用一个确定的、可以检验的说法，来代替这个「靠近」呢？\n\n提示你一个方向：既然要「可以检验」，就得分清楚谁先给定、谁随之确定。你先说说看，在这个定义里，应该先给定哪一个量？",
+  "citations": [
+    {
+      "citationId": "c1",
+      "documentId": "doc_9a2f4c",
+      "documentTitle": "高等数学-上册-第1章.pdf",
+      "pageNumber": 12,
+      "snippet": "设函数 f(x) 在点 a 的某个去心邻域内有定义。如果存在常数 L，使得对于任意给定的正数 ε，总存在正数 δ，当 0 < |x - a| < δ 时，有 |f(x) - L| < ε，则称 L 为函数 f(x) 当 x→a 时的极限。"
+    }
+  ],
+  "hasEvidence": true,
+  "followUps": [
+    "那 ε 和 δ 哪个是先给定的？",
+    "如果只从右侧趋近，结论还成立吗？"
+  ],
+  "emotion": "encouraging",
+  "action": "nod",
+  "isMock": true,
+  "promptVersion": "guided-tutoring.v1",
+  "createdAt": "2026-09-14T08:00:00Z"
+}
