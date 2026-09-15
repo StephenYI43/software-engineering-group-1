@@ -45,7 +45,11 @@ data: {"seq":4,"turnId":"turn_7f3a9c21","isComplete":false,"reason":"client_stop
 要点：`stopped` 是终止事件，`seq=4`；**没有** `completed`。
 该轮持久化为 `aborted`，**教学阶段不推进**——下一轮仍从 `thought` 继续。
 
-## 变体三：模型输出校验失败
+## 变体三：模型输出校验失败（同时演示 `isMock=false` 分支）
+
+> 本变体演示的是 `isMock=false`（真实供应商）分支的取值，供前端实现
+> 「不显示 Mock 标识」那条渲染路径。**样例本身仍是人工构造**，
+> 不代表发生过真实模型调用。取值规则见 [README.md](README.md)。
 
 ```text
 event: started
