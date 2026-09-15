@@ -1,6 +1,6 @@
 # 代码、命名与接口规范
 
-本文是开工基线，尚未安装框架或实现业务。首版建议 React + TypeScript + Vite 学生/教师 Web、FastAPI 模块化后端、PostgreSQL（需要时启用 pgvector），避免多人各自搭建不同架构。具体版本、模型供应商和部署平台由 M1 在脚手架任务的 ADR 中锁定，不使用“latest”作为可复现配置。
+本文是开工基线。API 健康检查骨架已建立，版本与范围见 [ADR-0001](adr/0001-platform-bootstrap.md)，业务尚未实现。首版延续 React + TypeScript + Vite 学生/教师 Web、FastAPI 模块化后端、PostgreSQL（需要时启用 pgvector）的建议。具体前端/数据库版本、模型供应商和部署平台在相应任务的 ADR 中锁定，不使用“latest”作为可复现配置。
 
 前端统一 pnpm，后端统一 uv；提交各自锁文件。新增框架、模型服务或数据库需要说明理由并由受影响负责人评审。
 
