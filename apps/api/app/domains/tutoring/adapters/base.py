@@ -8,7 +8,7 @@ allow-lists -- all of those stay on the server side of the adapter.
 
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.domains.tutoring.adapters.chunks import ModelChunk
 
@@ -17,9 +17,14 @@ __all__ = ["ModelClient", "ModelRequest", "RetrievedChunk", "Turn"]
 
 @dataclass(frozen=True, slots=True)
 class Turn:
-    """One conversation turn. `role` is `student` or `assistant`."""
+    """One conversation turn.
 
-    role: str
+    `role` is a closed set rather than free text: a typo such as `assistent`
+    must fail the type check instead of silently reaching a prompt. Validating
+    untrusted wire JSON stays with the caller's schema, not with this dataclass.
+    """
+
+    role: Literal["student", "assistant"]
     content: str
 
 

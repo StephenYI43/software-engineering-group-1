@@ -11,7 +11,7 @@ import json
 import re
 from dataclasses import fields, is_dataclass, replace
 from pathlib import Path
-from typing import get_args
+from typing import get_args, get_type_hints
 
 import pytest
 
@@ -121,6 +121,16 @@ def test_chunk_variants_are_closed() -> None:
         if isinstance(value, type) and is_dataclass(value)
     }
     assert exposed == {"TextDelta", "Usage", "Finished"}
+
+
+def test_turn_role_is_a_closed_set() -> None:
+    """`role` must stay a closed set, not degrade back to free text.
+
+    The annotation is the only enforcement point: this dataclass deliberately
+    does no runtime parsing, so a regression to `str` would let a typo reach a
+    prompt while every other test still passed.
+    """
+    assert set(get_args(get_type_hints(Turn)["role"])) == {"student", "assistant"}
 
 
 def test_chunks_carry_no_teaching_semantics() -> None:
