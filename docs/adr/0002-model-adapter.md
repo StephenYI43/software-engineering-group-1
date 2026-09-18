@@ -1,6 +1,6 @@
 # ADR-0002：模型 adapter 接口与离线 Mock 规范
 
-状态：提议（M1 已答复文末待确认事项第 1—3 条，其余仍待确认）
+状态：提议（M1 已答复文末待确认事项第 1—3 条，M2 已确认 SSE 传输方式；其余仍待确认）
 日期：2026-09-15
 提出人：M3 / @ljt2293977194-dotcom
 评审人：M1 @StephenYI43、M5 @Jiege123-CMYK
@@ -14,8 +14,10 @@
 
 > **引用约定**：本文中带 `docs/` 前缀的为仓库根相对路径；
 > 单独出现的 `tutoring-response.md` 与 `sse-events.md` 均指
-> `packages/contracts/tutoring/` 下的同名文件。所有行号以 `main` = `12e344c`（PR #12 合并后）为准，
+> `packages/contracts/tutoring/` 下的同名文件。所有行号以 `main` = `4ed95a3`（PR #24 合并后）为准，
 > 后续改动可能使其偏移。
+> PR #24 修订 tutoring 契约时给 `sse-events.md` 增加了 42 行，本文件对它的引用曾整体偏移，
+> 已按 `4ed95a3` 逐条重新核对。指向 `tutoring-response.md` 的引用未受影响（该文件未改动）。
 
 adapter（适配器）位于答疑逻辑与模型供应商之间：上层只依赖一个统一接口，接口下有两个实现——
 `MockModelClient`（不联网、不花钱、输出可预测，供开发与 CI）与真实供应商客户端。
@@ -41,7 +43,7 @@ adapter（适配器）位于答疑逻辑与模型供应商之间：上层只依�
 | `stage` 的计算与推进 | 服务端状态机 | `tutoring-response.md:70,130` |
 | `citations` 白名单校验、越界引用丢弃 | 服务端 | `tutoring-response.md:121-122` |
 | `hasEvidence` 判定 | 检索层 | `tutoring-response.md:119` |
-| 输出结构校验失败后的重试 | **服务端，不是 adapter** | `sse-events.md:126` |
+| 输出结构校验失败后的重试 | **服务端，不是 adapter** | `sse-events.md:133` |
 | `isMock` 取值 | 装配层注入 | `tutoring-response.md:127-129` |
 | `promptVersion` 取值 | 调用方传入，adapter 原样回传 | `tutoring-response.md:78` |
 | 授权文档集合 | 检索层输入，adapter 只接收 | `docs/requirements.md:26` |
@@ -138,7 +140,7 @@ async def generate(request: ModelRequest) -> AsyncIterator[ModelChunk]: ...
 | 输出无法解析或未通过结构校验（含重试后仍失败） | **服务端** | `MODEL_OUTPUT_INVALID` |
 | 检索不可用 | 检索层（此时不应调用 adapter） | `RETRIEVAL_UNAVAILABLE` |
 
-**必须记录的缺口：** `sse-events.md:126-130` 现有的五个错误码中，
+**必须记录的缺口：** `sse-events.md:131-137` 现有的五个错误码中，
 **没有「供应商 5xx / 密钥无效 / 配额耗尽」的位置**。补一个码（如 `MODEL_UNAVAILABLE`）
 需要修改 `sse-events.md`——那是 4 名共同 owner 的公共契约，
 必须另开 Issue、另开 PR（`AGENTS.md:7` 不擅自改公共接口）。列入「后续工作」。
@@ -154,12 +156,12 @@ async def generate(request: ModelRequest) -> AsyncIterator[ModelChunk]: ...
 - 三个 deadline 分开命名并给默认值（具体秒数待确认）：**连接**、**首 token**、**总时长**。
   依据 `docs/code-standards.md:63`「外部请求设置超时，重试有上限且考虑幂等」。
 - **重试只允许发生在第一个 `TextDelta` 之前。** 其后重试会重复已显示的文本，
-  并破坏 `sse-events.md:26`「`seq` 不跳号、不重复」的契约——此为硬规则。
-- **取消**：用户停止时，服务端必须关闭上游模型流（`sse-events.md:140`「不继续计费」）。
+  并破坏 `sse-events.md:33`「`seq` 不跳号、不重复」的契约——此为硬规则。
+- **取消**：用户停止时，服务端必须关闭上游模型流（`sse-events.md:159`「不继续计费」）。
   adapter 规范：在 `finally` 中关闭上游连接；**不吞 `asyncio.CancelledError`**
   （`docs/code-standards.md:63`「不吞异常」）；`aclose()` 必须可被重复调用，
-  因为 `sse-events.md:139` 要求停止操作幂等。
-- **断连**：`sse-events.md:145-149` 规定不重试、不续传。adapter 不得自行恢复。
+  因为 `sse-events.md:158` 要求停止操作幂等。
+- **断连**：`sse-events.md:181-185` 规定不重试、不续传。adapter 不得自行恢复。
 
 ### `isMock` 与 `promptVersion`
 
@@ -171,7 +173,7 @@ async def generate(request: ModelRequest) -> AsyncIterator[ModelChunk]: ...
   （文件名约定见 `docs/code-standards.md:53`）传入，adapter 原样回传。
   **Mock 与真实调用的取值必须相同**，否则评测结果不可比。adapter 绝不自行生成此值。
 - 日志字段固定为 `requestId` / 模型 / 提示词版本 / token 用量，
-  **绝不记录完整对话文本**（`docs/code-standards.md:105`、`sse-events.md:165`）。
+  **绝不记录完整对话文本**（`docs/code-standards.md:105`、`sse-events.md:202-203`）。
 
 ### 离线 Mock 的确定性
 
@@ -205,7 +207,7 @@ async def generate(request: ModelRequest) -> AsyncIterator[ModelChunk]: ...
 
 ### 密钥与配置
 
-`.gitignore:1-3` 已有约定（`.env` / `.env.*` 忽略，`!.env.example` 例外），但在 `main` = `12e344c`
+`.gitignore:1-3` 已有约定（`.env` / `.env.*` 忽略，`!.env.example` 例外），但在 `main` = `4ed95a3`
 上 **`.env.example` 并不存在**，`apps/api/app/` 下也没有任何读取环境变量的 settings 模块
 （`apps/api/app/core/` 目前只有 `request_id.py`）；且该目录是 M1 的负责目录（`docs/code-standards.md:15`）。
 
@@ -274,11 +276,11 @@ async def generate(request: ModelRequest) -> AsyncIterator[ModelChunk]: ...
 
 **回滚**：本文档只新增一个文件，回滚即 `git revert` 该提交，无迁移、无数据影响。
 
-**合并顺序（M1 于 Issue #15 规定，现已执行）**：
+**合并顺序（M1 于 Issue #15 规定，已全部执行）**：
 
 1. ~~PR #12（ADR-0001）先合并~~ —— 已完成，合并提交 `12e344c`
-2. ~~本分支 rebase 最新 `main`~~ —— 已完成，本分支基点已是 `12e344c`
-3. 本 ADR 再合并 —— **待办**
+2. ~~本分支 rebase 最新 `main`~~ —— 已完成
+3. ~~本 ADR 再合并~~ —— 已完成，PR #20，合并提交 `54e8dfc`
 
 实现阶段的门槛现已明确（`apps/api/pyproject.toml`）：`strict = true`（`:32`）且
 `files = ["app"]`（`:33`），意味着将来 `app/domains/tutoring/adapters/` 下的代码**必须完整标注类型**；
@@ -306,16 +308,20 @@ async def generate(request: ModelRequest) -> AsyncIterator[ModelChunk]: ...
 
 **此清单未勾选即未确认，不以 AI 自评代替成员评审。**
 
-## 相关依赖（均未冻结）
+## 相关依赖（除已注明者外均未冻结）
 
-- `packages/contracts/tutoring/README.md:6` 声明契约「待 M2 / M4 / M5 评审确认，确认前不应据此编写生产代码」。
+- `packages/contracts/tutoring/README.md:6-8` 声明契约「M2 已确认……**仍待 M4 / M5 评审确认**。确认前不应据此编写生产代码」。
+  M2 的确认见同文件「已确认事项」表；本 ADR 中依赖传输方式的部分随之解除，其余仍待 M4 / M5。
 - `tutoring-response.md:145-168` 的 ID 形态待确认。M1 的平台契约已给出候选前缀
   （`packages/contracts/platform/README.md:24-25`：`doc_` / `sess_` / `turn_` 归 M3），
   并把「M3/M5 确认 ID 格式和数据库到 API 映射」列为待办（同文件 `:48`）。
   **本 ADR 不重复定义 ID 形态**，只依赖该约定落定。
   另注：M1 已采纳本契约的 `citationId` 约定（同文件 `:32`「citationId=c1/c2 是轮内标签，
   保持原约定，不作为实体主键」）。
-- `sse-events.md:9-12` 的 fetch / EventSource 选择待 M2 确认。
+- ~~`sse-events.md:9-12` 的 fetch / EventSource 选择待 M2 确认~~ ——
+  **M2 已确认（2026-09-15）**：采用 `fetch` + `ReadableStream`，不使用 `EventSource`
+  （现 `sse-events.md:9-19`）。前端相应地自行实现帧解析与 `seq` 校验，且不使用
+  `AbortController` 实现停止（同文件「停止行为」）。
 - `tutoring-response.md:132-143` 的 `emotion` / `action` 定义权在
   `docs/tasks/m3.md:23` 与 `docs/tasks/m4.md:23` 之间相互矛盾，仍是占位值。
   M1 的平台契约表述为「M4 …另在其模块冻结 emotion/action 枚举」
