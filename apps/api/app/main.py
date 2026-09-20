@@ -1,4 +1,4 @@
-"""S0 liveness API. No database, authentication, or tutoring implementation yet."""
+"""S0 liveness API plus S1 login/logout (Issue #45). No database yet."""
 
 from collections.abc import Awaitable, Callable
 from typing import Literal
@@ -6,6 +6,8 @@ from typing import Literal
 from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel, Field
 
+from app.core.auth.router import create_auth_router
+from app.core.auth.settings import load_auth_settings
 from app.core.request_id import create_request_id
 
 
@@ -19,8 +21,10 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="大学生辅助学习 AI 数字人系统 API",
         version="0.1.0",
-        description="S0 development skeleton; liveness only, no authentication or learning data.",
+        description="S0 development skeleton plus S1 auth; no database or learning data yet.",
     )
+    # Fail loud on auth misconfiguration before serving any request.
+    application.include_router(create_auth_router(load_auth_settings()))
 
     @application.middleware("http")
     async def attach_request_id(
