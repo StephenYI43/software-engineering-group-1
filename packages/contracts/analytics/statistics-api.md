@@ -1,0 +1,199 @@
+# 班级学习统计查询契约（M6 → M2，S1）
+
+本文定义 M6 提供给 M2 的**统计展示接口**：教师端「班级概览」页读取的数据形状与语义。
+提供方 M6，消费方 M2；数据来源于学习事件聚合（消费侧语义见 [event-consumption.md](event-consumption.md)，PR #34）。
+
+依据：`docs/code-standards.md:92` 要求 M6 → M2 明确「时长、掌握度和统计周期、样本数、未知状态」；
+`docs/tasks/m6.md:29` 验收要求「无数据显示未知」；`docs/team-plan.md:29` 限定 M6 只做只读聚合。
+
+状态：**草案**，未实现。M2 评审确认前，教师端页面按本文的 Mock 开发（`docs/team-plan.md:70`）。
+
+## 范围与边界
+
+- 本文只覆盖 **S1 班级概览**一个端点。学生个人报告、知识点雷达图、周报属 S2 增量，
+  另行出文件并请 M2 评审。
+- **班级列表不在本文**：教师可见班级来自 M1 的身份/权限接口。本文的 `classId` 是入参。
+- **权限不在聚合层**：教师仅见授权班级由 M1 鉴权层在 API 入口判定（`docs/tasks/m6.md:29`）；
+  聚合层默认输入已按授权过滤，详见下方「权限与错误」。
+- 本文只读，不产生副作用；不定义 M6 如何消费事件（那是 event-consumption.md 的范围）。
+
+## 端点
+
+### `GET /api/v1/analytics/classes/{classId}/overview`
+
+查询参数：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| `period` | enum | 否 | `last7d` | 统计周期，取值 `last7d` / `last30d` / `custom` |
+| `from` | string | 条件 | — | `period=custom` 时必填，UTC ISO 8601 |
+| `to` | string | 条件 | — | `period=custom` 时必填，UTC ISO 8601 |
+| `timezone` | string | 否 | `Asia/Shanghai` | IANA 时区名，决定「按日」聚合的日界 |
+
+`last7d` / `last30d` 的定义：以 `timezone` 下的**当日 00:00 为终点**，向前取 7 / 30 个自然日，
+区间左闭右开。服务端**不得**依赖服务器本地时区（`docs/code-standards.md:55`：API 用 UTC，UI 按用户时区显示）。
+
+日界时区必须显式声明，因为「学生 × 日」是聚合维度（event-consumption.md 聚合边界）：
+同一批事件在 `Asia/Shanghai` 与 `UTC` 下会落入不同的「日」。
+
+响应恒为 200 + 结构化 JSON（无数据不是错误，见「未知状态」）。
+
+## `MetricNumber`：所有由事件派生的数字的统一形状
+
+```json
+{ "state": "known", "value": 1680, "algorithm": "session_inference_v1" }
+{ "state": "unknown", "reason": "no_events_in_period" }
+```
+
+- **凡是可从学习事件派生的数字（时长、提交数、活跃人数、错题数），一律用本形状，不允许裸数字。**
+  这是 `docs/tasks/m6.md:29`「无数据显示未知」的落地点：周期内无事件的学生，
+  其时长必须是 `unknown`，**不得返回 0**——0 是「学了但时长为零」的错误陈述。
+- `reason` 枚举（S1）：
+  - `no_events_in_period`：该对象在周期内没有任何事件，无法判定；
+  - `duration_source_unavailable`：时长来源不可用（预留，见「时长口径」）。
+- `algorithm` 仅出现在时长类指标上，取值见「时长口径」；M2 需把它展示给教师，
+  避免把所有时长当作同一种测量口径。
+
+## 样例
+
+| 样例 | 覆盖场景 |
+| --- | --- |
+| [samples/01-class-overview-ok.json](samples/01-class-overview-ok.json) | 正常返回：含已知学生、无事件学生（`unknown`）、样本不足标记 |
+| [samples/02-class-overview-no-data.json](samples/02-class-overview-no-data.json) | 全班无数据：`dataThrough` 为 null，汇总与学生全为 `unknown`，不返回 0 |
+| [samples/03-error-class-not-found.json](samples/03-error-class-not-found.json) | 404：班级不存在或未授权 |
+| [samples/04-error-validation-failed.json](samples/04-error-validation-failed.json) | 422：周期参数不合法 |
+| [samples/05-error-source-unavailable.json](samples/05-error-source-unavailable.json) | 503：数据源不可用，不返回部分数字 |
+
+样例 01 / 02 的数字可由固定合成事件集推导
+（[docs/prototypes/samples/learning-events-synthetic.jsonl](../../../docs/prototypes/samples/learning-events-synthetic.jsonl)，
+M6 教师端 S0 交付物，随独立 PR 合并，评审本文件时该链接可能尚未生效）：
+`user_mock_s01` 提交 2 次（同 `submissionId` 的重复事件不重复计）、
+`user_mock_s02` 提交 1 次、`user_mock_s03` 无事件故为 `unknown`。
+样例只用于契约评审与页面 Mock，**不是**已实现接口的响应证据。
+
+## 响应结构
+
+结构以样例为准，字段说明如下。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `classId` | string | 回显入参 |
+| `period` | object | `from` / `to`（UTC）/ `timezone` / `days`，服务端解析后的实际区间 |
+| `dataThrough` | string \| null | **消费位点**：统计覆盖到的事件时刻（对应游标），null 表示尚未消费任何事件 |
+| `generatedAt` | string | 响应生成时刻，UTC |
+| `summary` | object | 班级汇总，见下 |
+| `summary.totalDurationSeconds` | `MetricNumber` | 汇总时长，**只累加有数据的学生**，覆盖率由 `coverage` 交代 |
+| `summary.activeStudentCount` | `MetricNumber` | 周期内有事件的去重学生数 |
+| `summary.submissionCount` | `MetricNumber` | 去重后的提交数（去重键 `submissionId`，见「聚合口径」） |
+| `summary.coverage` | object | `studentCount`（班级学生总数）/ `studentsWithData` / `studentsWithoutData` |
+| `weakPoints.byQuestionType` | array | 题型薄弱点，见下 |
+| `weakPoints.byChapter` | array | 章节薄弱点，见下 |
+| `students` | array | 学生明细，见下 |
+
+`summary.totalDurationSeconds.value` 的语义是「**有数据的学生**的时长之和」，
+不是全班总量。存在无数据学生时 `coverage.studentsWithoutData > 0`，
+M2 必须把覆盖率显示出来，否则教师会把部分数据误读为全班数据。
+
+### 薄弱点条目
+
+两个维度**分开返回**，不混在同一个排行里——`errorRate`（错误率）与 `mistakeCount`（错题数）
+不是同一量纲，混排会误导教师。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `key` | string | 题型枚举值（如 `single_choice`）或 `chapterId` |
+| `label` | string \| null | 展示名，服务端有则给，无则 null 由 M2 兜底显示 key |
+| `errorRate` | number | 仅 `byQuestionType`：错误题数 / 参与判分题数，取值 `[0,1]` |
+| `mistakeCount` | number | 仅 `byChapter`：错题收录数 |
+| `resolvedCount` | number | 仅 `byChapter`：其中已解决数 |
+| `sampleSize` | number | 样本量（题型=参与判分的题数；章节=错题数） |
+| `insufficientSample` | boolean | `sampleSize < 5`（`MIN_SAMPLE_SIZE`）时为 true |
+
+排序规则（同一维度内，服务端保证确定性）：
+
+1. `insufficientSample` 升序——**样本充足的条目排在样本不足的条目之前**；
+2. `sampleSize` 降序；
+3. 错误率（`byQuestionType`）/ 错题数（`byChapter`）降序；
+4. `key` 字典序。
+
+排序**不按错误率单独排序**：样本量 1、错误率 100% 的条目霸榜会误导教师（本文随附样例即为此场景）。
+`sampleSize` 与 `insufficientSample` 必须展示，M2 对样本不足条目需给出显式提示。
+
+### 学生明细条目
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `userId` | string | 学生 ID（合成账号；真实学生资料不入公开仓库，`AGENTS.md:7`） |
+| `displayName` | string \| null | 展示名，由 M1 身份接口提供；无则 null |
+| `dataState` | enum | `known` / `unknown`，与 `durationSeconds.state` 一致（显式冗余，防止 M2 只看时长而忽略未知） |
+| `durationSeconds` | `MetricNumber` | 周期内学习时长，口径见「时长口径」 |
+| `submissionCount` | `MetricNumber` | 去重后的提交数 |
+| `weakestChapter` | object \| null | 该生错题最多的章节，字段同 `byChapter` 条目；`null` 表示**本周期无错题记录**（已知事实，不是未知） |
+
+`weakestChapter` 为 `null` 与 `dataState=unknown` 是两件事：前者是「没有错题」，
+后者是「没有任何数据」。M2 展示文案必须区分（如「本周期无错题」vs「暂无数据」）。
+
+## 聚合口径（S1 最小集）
+
+算法参数是实现中的命名常量，此处固化语义，实现须一致（`docs/tasks/m6.md:13`「注明样本/周期/算法」）。
+
+### 时长口径（`algorithm`）
+
+S1 没有上报时长的学习事件（M4 的专注计时事件尚未定义），时长由**会话推断**得出，
+`algorithm` 标记为 `session_inference_v1`：
+
+- 同一学生的事件按 `occurredAt` 升序，相邻事件间隔 ≤ `15 分钟` 视为同一会话；
+- 单个会话时长 = 会话内首末事件间隔，最低 `60 秒`（单事件会话按最低计），
+  上限 `3600 秒`（防止长间隔挂机虚增）；
+- 学生周期时长 = 其各会话时长之和，按 `timezone` 日界切分为「学生 × 日」。
+
+**这是过渡口径，不是测量值。** 待 M4 的专注计时事件就绪后，切换为累加上报时长，
+`algorithm` 变为 `focus_timer_v1`，M2 可据此区分口径；切换只改聚合实现的一处，
+响应结构不变。
+
+### 薄弱点口径
+
+- **题型**：每个 `submissionId` 取「`occurredAt` 最新且 `isCorrect` 非 null 的事件」判定对错。
+  `assignment_submitted` 与 `assignment_graded` 都可用于判定（客观题提交即判分场景只发前者）；
+  主观题未判分（`isCorrect` 为 null）**不计入分母**——未判分不是错误。
+- **章节**：来自 `mistake_recorded` 计数，`resolvedCount` 来自 `mistake_resolved`。
+  本周期无错题的章节**不出现在结果里**，不返回 0 行。
+- **提交数**：按 `submissionId` 去重。即使消费侧收到同一 `submissionId` 的重复事件
+  （契约外情形，见 event-consumption.md），提交数也不得重复计数。
+
+## 权限与错误
+
+错误结构遵循 `docs/code-standards.md:73`：`{ code, message, requestId, details }`。
+
+| 状态 | code | 场景 |
+| --- | --- | --- |
+| 401 | `UNAUTHENTICATED` | 未认证 |
+| 404 | `CLASS_NOT_FOUND` | 班级不存在，**或**不在教师授权范围内 |
+| 422 | `VALIDATION_FAILED` | `period` 取值非法、`custom` 缺 `from`/`to`、`from >= to`、`timezone` 非法 |
+| 503 | `ANALYTICS_SOURCE_UNAVAILABLE` | 聚合数据源不可用 |
+
+- 「不存在」与「无权限」统一返回 404，避免通过状态码枚举他人班级
+  （`docs/code-standards.md:82` 私有资源统一策略）。此约定需 M1 确认，因为判定发生在鉴权层。
+- 503 时**不得**返回部分或伪造数字；`message` 不暴露堆栈（`docs/code-standards.md:63`）。
+- **无数据不是错误**：周期内无事件必须 200 + `unknown`，不能 404 或 5xx。
+
+## 幂等、缓存与路由
+
+- 本端点为只读 GET，天然幂等；重复请求不产生副作用。
+- 响应头 `Cache-Control: no-store`（统计随事件消费持续变化，不能缓存给教师看旧数）。
+- M6 提供 `APIRouter`；**挂载进 app factory 由 M1 协调**（`docs/team-plan.md:27`，`apps/api/app/main.py` 属 M1）。
+  M6 不直接改公共入口文件。
+
+## 待确认事项
+
+- [ ] M2 确认字段与未知/样本不足的展示约定（尤其是 `MetricNumber`、`coverage`、`weakestChapter` 的三态区分）
+- [ ] M1 确认：404 统一策略、`dataThrough` 口径、router 挂载方式
+- [ ] M5 确认：`submissionId` 去重与主观题判分口径与 learning 契约一致（PR #26）
+- [ ] 确认后本文转为冻结版；实现见 `apps/api/app/domains/analytics`
+
+此清单未勾选即未确认，不以 AI 自评代替成员评审。
+
+## 变更流程
+
+本契约的消费方是 M2，数据来源方是 M5/M1。修改字段、状态码或聚合口径前先通知 M2，
+涉及事件来源的改动还需通知 M5；变更同时更新样例与调用方。
