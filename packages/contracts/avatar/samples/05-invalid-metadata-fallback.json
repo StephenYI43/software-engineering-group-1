@@ -1,0 +1,29 @@
+{
+  "scenario": "非法 emotion/action 降级为 neutral/idle",
+  "description": "emotion 与 action 不在枚举内时（本例模拟模型或联调期给出的脏数据），组件按 neutral/idle 渲染并照常完成播报：text 完整保留，不因展示元数据非法导致整轮回答失败。枚举校验的第一责任在 M3，本条是组件层兜底。",
+  "calls": [
+    {
+      "method": "speak",
+      "input": {
+        "utteranceId": "utt_8a3f6b0d",
+        "text": "很好，这次你独立求出了导数。回头看一下，链式法则用在了哪一步？",
+        "emotion": "excited",
+        "action": "dance"
+      }
+    }
+  ],
+  "expectedEffectiveInput": {
+    "emotion": "neutral",
+    "action": "idle"
+  },
+  "expectedEvents": [
+    {
+      "type": "avatar_playback_started",
+      "utteranceId": "utt_8a3f6b0d"
+    },
+    {
+      "type": "avatar_playback_completed",
+      "utteranceId": "utt_8a3f6b0d"
+    }
+  ]
+}
