@@ -1,0 +1,104 @@
+{
+  "_note": "多种学习事件样例，供 M6 消费对照。事件只追加不修改（append-only）；幂等命中已有记录时不重复发布；eventId 全局唯一由 M5 服务端生成，不接受客户端传入。payload 中带 `?` 的字段可空（null）：assignment_submitted.isCorrect/score 在主观题待批阅时为 null；assignment_graded.score 在只判对错题型时为 null；mistake_recorded.assignmentId/chapterId 在答疑场景主动标记时为 null。",
+  "events": [
+    {
+      "eventId": "event_3f8a2c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+      "eventType": "assignment_submitted",
+      "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "occurredAt": "2026-09-15T14:32:00Z",
+      "traceId": "req_8d1f0c335e6f7a8b9c0d1e2f3a4b5c6d",
+      "schemaVersion": "1.0",
+      "payload": {
+        "submissionId": "submission_7a3c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+        "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+        "questionType": "single_choice",
+        "isCorrect": true,
+        "score": 10
+      }
+    },
+    {
+      "eventId": "event_4a9b3d5e6f7a8b9c0d1e2f3a4b5c6d7e",
+      "eventType": "assignment_graded",
+      "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "occurredAt": "2026-09-16T10:15:00Z",
+      "traceId": "req_a1b2c3d47b8c9d0e1f2a3b4c5d6e7f8a",
+      "schemaVersion": "1.0",
+      "payload": {
+        "submissionId": "submission_8b4d2e5f6a7b8c9d0e1f2a3b4c5d6e7f",
+        "isCorrect": true,
+        "score": 18
+      }
+    },
+    {
+      "eventId": "event_5b9c1e6f7a8b9c0d1e2f3a4b5c6d7e8f",
+      "eventType": "mistake_recorded",
+      "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "occurredAt": "2026-09-15T14:35:00Z",
+      "traceId": "req_8d1f0c335e6f7a8b9c0d1e2f3a4b5c6d",
+      "schemaVersion": "1.0",
+      "payload": {
+        "mistakeId": "mistake_9c4b2e5f6a7b8c9d0e1f2a3b4c5d6e7f",
+        "source": "wrong_submission",
+        "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+        "chapterId": "chapter_2c9e1a3b4d5c6e7f8a9b0c1d2e3f4a5b"
+      }
+    },
+    {
+      "eventId": "event_6c1d2f7a8b9c0d1e2f3a4b5c6d7e8f9a",
+      "eventType": "mistake_resolved",
+      "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "occurredAt": "2026-09-18T20:00:00Z",
+      "traceId": "req_b2c3d4e58c9d0e1f2a3b4c5d6e7f8a9b",
+      "schemaVersion": "1.0",
+      "payload": {
+        "mistakeId": "mistake_9c4b2e5f6a7b8c9d0e1f2a3b4c5d6e7f"
+      }
+    },
+    {
+      "eventId": "event_7d3a1f8b9c0d1e2f3a4b5c6d7e8f9a0b",
+      "eventType": "study_plan_saved",
+      "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "occurredAt": "2026-09-15T15:30:00Z",
+      "traceId": "req_9e2b4d116f7a8b9c0d1e2f3a4b5c6d7e",
+      "schemaVersion": "1.0",
+      "payload": {
+        "planId": "plan_6d8a3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+        "source": "tutoring",
+        "itemsCount": 2
+      }
+    },
+    {
+      "eventId": "event_8e4b2a9c0d1e2f3a4b5c6d7e8f9a0b1c",
+      "eventType": "plan_item_completed",
+      "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "occurredAt": "2026-09-18T21:00:00Z",
+      "traceId": "req_c3d4e5f69d0e1f2a3b4c5d6e7f8a9b0c",
+      "schemaVersion": "1.0",
+      "payload": {
+        "planId": "plan_6d8a3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+        "itemId": "plan_item_3a1b2c4d5e6f7a8b9c0d1e2f3a4b5c6d"
+      }
+    },
+    {
+      "eventId": "event_9f5c3b0d1e2f3a4b5c6d7e8f9a0b1c2d",
+      "eventType": "reminder_triggered",
+      "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "occurredAt": "2026-09-18T08:00:00Z",
+      "traceId": "req_d4e5f6a70e1f2a3b4c5d6e7f8a9b0c1d",
+      "schemaVersion": "1.0",
+      "payload": {
+        "reminderId": "reminder_5e8d2a4b5c6d7e8f9a0b1c2d3e4f5a6b",
+        "type": "plan_due",
+        "dueAt": "2026-09-18T23:59:00Z"
+      }
+    }
+  ],
+  "_note_chapter_viewed": "chapter_viewed 事件由 M2 发布（前端行为事件），M5 不实现这条。M2 的发布 schema 由 M2 单独定义并交 M6 评审，不在本样例中。"
+}
