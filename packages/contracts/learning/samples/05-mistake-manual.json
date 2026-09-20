@@ -1,11 +1,11 @@
 {
   "_note": "学生主动标记场景：在 M3 答疑后从答疑页面点击「加入错题本」，source=manual，关联 sourceTurnId。去重键命中已有记录时返回 200 已有对象，不发布事件。",
   "request_POST_mistakes": {
-    "courseId": "course_b3f1c2d4",
-    "chapterId": "chapter_2c9e1a",
-    "assignmentId": "assignment_4d8e2b",
-    "submissionId": "submission_7a3c1d",
-    "sourceTurnId": "turn_7f3a9c21",
+    "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "chapterId": "chapter_2c9e1a3b4d5c6e7f8a9b0c1d2e3f4a5b",
+    "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+    "submissionId": "submission_7a3c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+    "sourceTurnId": "turn_7f3a9c214d5e6f7a8b9c0d1e2f3a4b5c",
     "source": "manual",
     "question": {
       "stem": "求极限 lim(x→0) sin(x)/x",
@@ -18,13 +18,13 @@
   },
   "response_201_created": {
     "_note": "首次收录返回 201",
-    "id": "mistake_3e7d1a",
-    "studentId": "user_b8c1d2",
-    "courseId": "course_b3f1c2d4",
-    "chapterId": "chapter_2c9e1a",
-    "assignmentId": "assignment_4d8e2b",
-    "submissionId": "submission_7a3c1d",
-    "sourceTurnId": "turn_7f3a9c21",
+    "id": "mistake_3e7d1a4b5c6d7e8f9a0b1c2d3e4f5a6b",
+    "studentId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+    "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "chapterId": "chapter_2c9e1a3b4d5c6e7f8a9b0c1d2e3f4a5b",
+    "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+    "submissionId": "submission_7a3c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+    "sourceTurnId": "turn_7f3a9c214d5e6f7a8b9c0d1e2f3a4b5c",
     "source": "manual",
     "question": {
       "stem": "求极限 lim(x→0) sin(x)/x",
@@ -40,13 +40,13 @@
   },
   "response_200_duplicate": {
     "_note": "同一去重键 (studentId, assignmentId, normalizedStem) 已有 active 记录时返回 200 已有记录，不发布事件",
-    "id": "mistake_3e7d1a",
-    "studentId": "user_b8c1d2",
-    "courseId": "course_b3f1c2d4",
-    "chapterId": "chapter_2c9e1a",
-    "assignmentId": "assignment_4d8e2b",
-    "submissionId": "submission_7a3c1d",
-    "sourceTurnId": "turn_7f3a9c21",
+    "id": "mistake_3e7d1a4b5c6d7e8f9a0b1c2d3e4f5a6b",
+    "studentId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+    "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "chapterId": "chapter_2c9e1a3b4d5c6e7f8a9b0c1d2e3f4a5b",
+    "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+    "submissionId": "submission_7a3c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+    "sourceTurnId": "turn_7f3a9c214d5e6f7a8b9c0d1e2f3a4b5c",
     "source": "manual",
     "question": {
       "stem": "求极限 lim(x→0) sin(x)/x",
@@ -61,18 +61,18 @@
     "updatedAt": "2026-09-15T15:10:00Z"
   },
   "learningEvent_mistake_recorded": {
-    "_note": "仅首次收录发布；幂等命中已有记录时不发布（避免 M6 重复计数）",
-    "eventId": "event_8c2d4f",
+    "_note": "仅首次收录发布；幂等命中已有记录时不发布（避免 M6 重复计数）。手动标记的事件 eventId 与 mistake 同后缀，便于关联溯源。",
+    "eventId": "event_3e7d1a4b5c6d7e8f9a0b1c2d3e4f5a6b",
     "eventType": "mistake_recorded",
-    "userId": "user_b8c1d2",
-    "courseId": "course_b3f1c2d4",
+    "userId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
+    "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
     "occurredAt": "2026-09-15T15:10:00Z",
-    "traceId": "req_9e2b4d11",
+    "traceId": "req_9e2b4d116f7a8b9c0d1e2f3a4b5c6d7e",
     "schemaVersion": "1.0",
     "payload": {
-      "mistakeId": "mistake_3e7d1a",
+      "mistakeId": "mistake_3e7d1a4b5c6d7e8f9a0b1c2d3e4f5a6b",
       "source": "manual",
-      "assignmentId": "assignment_4d8e2b"
+      "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c"
     }
   }
 }

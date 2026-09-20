@@ -3,7 +3,8 @@
 学生错题本的查询、主动收录与移除。**本契约的核心硬约束：禁止把所有问题默认当错题收录**
 （`docs/tasks/m5.md:13`、`docs/team-plan.md:61`）。
 
-所有 JSON 字段为 **camelCase**（`docs/code-standards.md:48`）。
+所有 JSON 字段为 **camelCase**（`docs/code-standards.md:48`）。ID 形态为 `<前缀>_<32 位小写 hex>`
+（见 [README.md](README.md)「ID 形态」）。
 
 ## 收录触发路径（**只有这两条**）
 
@@ -29,7 +30,7 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `id` | string | 是 | 形如 `mistake_9c4b2e` |
+| `id` | string | 是 | 形如 `mistake_9c4b2e5f6a7b8c9d0e1f2a3b4c5d6e7f` |
 | `studentId` | string | 是 | 错题所属学生 |
 | `courseId` | string | 是 | 关联课程 |
 | `chapterId` | string \| null | 否 | 关联章节 |
@@ -64,7 +65,7 @@
 > `resolved` 不删除记录，只是从默认列表（`status=active`）中隐藏。
 > 这是 M6 统计「错题已掌握率」的依据，删除会让统计失真。
 
-### question 结构（题目快照）
+### question 结构（题目快照，按来源差异化）
 
 ```json
 {
@@ -78,9 +79,19 @@
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `stem` | string | 题干文本，≤ 4000 字符 |
-| `questionType` | string | 复用 [homework.md](homework.md) 的 questionType 枚举 |
+| `questionType` | string | 见下方取值 |
 | `options` | array \| null | 选择题选项；其他题型为 null |
 | `attachmentUrl` | string \| null | 题目附图等附件 URL，需净化后渲染 |
+
+**`questionType` 取值**（M2 在 PR #26 第 A 条要求区分答疑来源）：
+
+| 来源 | questionType | 说明 |
+| --- | --- | --- |
+| 作业场景（`source=wrong_submission` 或从作业详情 `source=manual`） | 复用 [homework.md](homework.md) 作业题型：`single_choice` / `multiple_choice` / `fill_blank` / `short_answer` / `proof` | 题型来自作业 |
+| 答疑场景（从 M3 答疑后 `source=manual`） | `tutoring_question` | 题目是自由文本，不属于作业题型；`options` 为 null |
+
+> 上一版 `questionType` 全部复用作业题型，被 M2 指出答疑页的自由文本没有对应题型。
+> 本版新增 `tutoring_question` 专用于答疑后主动标记场景；作业场景仍用作业题型。
 
 **`question` 是收录时刻的快照**。后续教师修订作业题面不影响已收录的错题记录。
 这是为了让学生复习时看到的是「我当时答错的题」，而非教师最新版本。
@@ -92,15 +103,15 @@
 学生主动标记错题。**服务端校验 source 必须为 `manual`**，禁止客户端伪造 `wrong_submission`
 （那只能由服务端在判分时触发）。
 
-请求：
+请求（作业场景）：
 
 ```json
 {
-  "courseId": "course_b3f1c2d4",
-  "chapterId": "chapter_2c9e1a",
-  "assignmentId": "assignment_4d8e2b",
-  "submissionId": "submission_7a3c1d",
-  "sourceTurnId": "turn_7f3a9c21",
+  "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "chapterId": "chapter_2c9e1a3b4d5c6e7f8a9b0c1d2e3f4a5b",
+  "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+  "submissionId": "submission_7a3c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+  "sourceTurnId": null,
   "source": "manual",
   "question": {
     "stem": "求极限 lim(x→0) sin(x)/x",
@@ -113,6 +124,27 @@
 }
 ```
 
+请求（答疑场景，`questionType = tutoring_question`）：
+
+```json
+{
+  "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "chapterId": null,
+  "assignmentId": null,
+  "submissionId": null,
+  "sourceTurnId": "turn_7f3a9c214d5e6f7a8b9c0d1e2f3a4b5c",
+  "source": "manual",
+  "question": {
+    "stem": "函数在一点的极限定义是什么？",
+    "questionType": "tutoring_question",
+    "options": null,
+    "attachmentUrl": null
+  },
+  "studentAnswer": null,
+  "note": "答疑时没记住 ε-δ 定义"
+}
+```
+
 响应 201：返回完整 Mistake 对象。
 
 ### 幂等：重复收录不重复创建
@@ -121,6 +153,9 @@
 - 同一作业、同一题干（stem 规范化后比较）已有 `active` 状态错题时，
   重复 `POST /api/v1/mistakes` 返回**已有记录**，HTTP 200（而非 201）
 - 自动收录路径同理：教师重新批阅导致 `isCorrect` 再次翻转为 false 时不重复收录
+
+> 答疑场景（`assignmentId = null`）的去重键退化为 `(studentId, sourceTurnId, normalizedStem)`，
+> 同一答疑 turn 对同一 stem 只保留一条 active 记录。
 
 `docs/tasks/m5.md:29` 的验收标准「重复请求不重复收录」即指此规则。
 
@@ -136,6 +171,7 @@
 | `pageSize` | integer | 20 | 1—100 |
 | `courseId` | string \| null | null | 按课程过滤 |
 | `chapterId` | string \| null | null | 按章节过滤 |
+| `source` | string \| null | null | 按来源过滤（`wrong_submission` / `manual`） |
 | `status` | string | `active` | `active` / `resolved` / `archived` / `all` |
 
 响应 200：分页列表。
@@ -168,8 +204,9 @@
 2. **`wrong_submission` 路径只在 `isCorrect: null → false` 的翻转瞬间触发一次。**
    后续重新批阅（`false → true`）不删除已收录错题，但 `mistake.submissionId` 指向的
    submission 状态可被前端用于显示「后来重做对了」。
-3. **去重键：`(studentId, assignmentId, normalizedStem)`。** `normalizedStem` 是题干
-   去除首尾空白与多余空白后的形式。同一去重键只保留一条 `active` 记录。
+3. **去重键：作业场景 `(studentId, assignmentId, normalizedStem)`；答疑场景
+   `(studentId, sourceTurnId, normalizedStem)`。** `normalizedStem` 是题干去除首尾空白
+   与多余空白后的形式。同一去重键只保留一条 `active` 记录。
 4. **`question` 是快照，不随后续修订更新。** 见上文。
 5. **学生只能读写自己的错题。** 任何端点对他人错题的访问返回 404。
 6. **教师不能直接读写学生错题。** 教师后台看到的是 M6 聚合统计（按学生匿名汇总），
@@ -183,7 +220,7 @@
 
 | 事件 | 触发时机 | 关键 payload |
 | --- | --- | --- |
-| `mistake_recorded` | 自动或手动收录成功（含幂等命中已有记录） | `mistakeId`, `source`, `assignmentId?` |
+| `mistake_recorded` | 自动或手动收录成功（含幂等命中已有记录） | `mistakeId`, `source`, `assignmentId?`, `chapterId?` |
 | `mistake_resolved` | `status` 翻转到 `resolved` | `mistakeId` |
 
 ## 错误响应

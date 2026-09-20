@@ -1,23 +1,25 @@
 {
   "assignmentStudentView": {
-    "id": "assignment_4d8e2b",
-    "courseId": "course_b3f1c2d4",
-    "chapterId": "chapter_2c9e1a",
+    "id": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+    "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "classId": "class_f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
+    "chapterId": "chapter_2c9e1a3b4d5c6e7f8a9b0c1d2e3f4a5b",
     "title": "习题 1.2 极限计算",
     "description": "求下列极限，写出主要步骤。",
     "questionType": "single_choice",
     "maxScore": 10,
     "dueAt": "2026-09-22T23:59:00Z",
     "publishedAt": "2026-09-14T10:30:00Z",
-    "teacherId": "user_9a2f4c",
+    "teacherId": "user_9a2f4c3d5e6f7a8b9c0d1e2f3a4b5c6d",
     "createdAt": "2026-09-14T10:30:00Z",
     "updatedAt": "2026-09-14T10:30:00Z",
     "_note": "answerKey 字段在学生视角下不存在（不是 null），见 homework.md 不变量 1"
   },
   "assignmentTeacherView": {
-    "id": "assignment_4d8e2b",
-    "courseId": "course_b3f1c2d4",
-    "chapterId": "chapter_2c9e1a",
+    "id": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+    "courseId": "course_b3f1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "classId": "class_f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
+    "chapterId": "chapter_2c9e1a3b4d5c6e7f8a9b0c1d2e3f4a5b",
     "title": "习题 1.2 极限计算",
     "description": "求下列极限，写出主要步骤。",
     "questionType": "single_choice",
@@ -27,7 +29,7 @@
     "maxScore": 10,
     "dueAt": "2026-09-22T23:59:00Z",
     "publishedAt": "2026-09-14T10:30:00Z",
-    "teacherId": "user_9a2f4c",
+    "teacherId": "user_9a2f4c3d5e6f7a8b9c0d1e2f3a4b5c6d",
     "createdAt": "2026-09-14T10:30:00Z",
     "updatedAt": "2026-09-14T10:30:00Z"
   },
@@ -35,32 +37,34 @@
     "answer": {
       "options": ["B"]
     },
-    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a"
+    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a7b8c9d0e1f2a3b4c"
   },
   "submissionResponse_201_firstTime": {
-    "id": "submission_7a3c1d",
-    "assignmentId": "assignment_4d8e2b",
-    "studentId": "user_b8c1d2",
+    "id": "submission_7a3c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+    "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+    "classId": "class_f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
+    "studentId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
     "answer": { "options": ["B"] },
     "isCorrect": true,
     "score": 10,
     "gradedAt": "2026-09-15T14:32:00Z",
     "gradedBy": "auto",
-    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a",
+    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a7b8c9d0e1f2a3b4c",
     "submittedAt": "2026-09-15T14:32:00Z",
     "createdAt": "2026-09-15T14:32:00Z"
   },
   "submissionResponse_200_idempotentRetry": {
     "_note": "客户端用相同 idempotencyKey 重试时，返回首次创建的对象，HTTP 200 而非 201",
-    "id": "submission_7a3c1d",
-    "assignmentId": "assignment_4d8e2b",
-    "studentId": "user_b8c1d2",
+    "id": "submission_7a3c1d4e5f6a7b8c9d0e1f2a3b4c5d6e",
+    "assignmentId": "assignment_4d8e2b3c4d5e6f7a8b9c0d1e2f3a4b5c",
+    "classId": "class_f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
+    "studentId": "user_b8c1d23e4f5a6b7c8d9e0f1a2b3c4d5e",
     "answer": { "options": ["B"] },
     "isCorrect": true,
     "score": 10,
     "gradedAt": "2026-09-15T14:32:00Z",
     "gradedBy": "auto",
-    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a",
+    "idempotencyKey": "idem_8f3a2b9c1d4e5f6a7b8c9d0e1f2a3b4c",
     "submittedAt": "2026-09-15T14:32:00Z",
     "createdAt": "2026-09-15T14:32:00Z"
   }
