@@ -1,0 +1,31 @@
+{
+  "scenario": "播报过程中播放失败，文字回答保留",
+  "description": "speak 已开始播报（avatar_playback_started），播放过程中失败：该 utteranceId 产生终止事件 avatar_playback_error，error 遵循 code/message/requestId/details 结构。播放失败后文字回答继续保留展示（语音/文字降级路径），不得呈现为播报成功；completed/stopped/error 互斥，此后该 utteranceId 不再产生任何事件。",
+  "calls": [
+    {
+      "method": "speak",
+      "input": {
+        "utteranceId": "utt_3d9c52e7",
+        "text": "我们先不急着写出定义。你想一想，说「当 x 靠近 a 时 f(x) 趋近 L」，这里的「靠近」应该怎么精确描述呢？",
+        "emotion": "encouraging",
+        "action": "nod"
+      }
+    }
+  ],
+  "expectedEvents": [
+    {
+      "type": "avatar_playback_started",
+      "utteranceId": "utt_3d9c52e7"
+    },
+    {
+      "type": "avatar_playback_error",
+      "utteranceId": "utt_3d9c52e7",
+      "error": {
+        "code": "AVATAR_PLAYBACK_FAILED",
+        "message": "播放失败，文字回答已保留",
+        "requestId": "req_6f2a91c4",
+        "details": {}
+      }
+    }
+  ]
+}
