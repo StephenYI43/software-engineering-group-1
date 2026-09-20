@@ -1,0 +1,234 @@
+:root {
+  --color-text: #1a1a1a;
+  --color-muted: #5c5c5c;
+  --color-border: #d8d8d8;
+  --color-surface: #ffffff;
+  --color-bg: #f6f7f9;
+  --color-accent: #2f6feb;
+  --color-warn-bg: #fff5e0;
+  --color-warn-border: #e0a800;
+  --color-error: #b3261e;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  line-height: 1.7;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+.app-shell {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 24px;
+}
+
+.app-header__brand {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-header__nav a {
+  margin-right: 12px;
+}
+
+/* packages/ui 组件 */
+
+.ui-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.ui-card__title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.ui-card__body > :first-child {
+  margin-top: 0;
+}
+
+.ui-card__body > :last-child {
+  margin-bottom: 0;
+}
+
+.ui-button {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.ui-button--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.ui-button--secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.ui-state {
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  margin: 12px 0;
+}
+
+.ui-state--error {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.ui-state__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ui-state__description,
+.ui-state__meta {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+/* 示意数据标识——必须醒目，不能被当成真实结果 */
+
+.ui-mock-badge {
+  background: var(--color-warn-bg);
+  border: 1px solid var(--color-warn-border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 8px 0 16px;
+  font-size: 0.875rem;
+}
+
+/* 学生端页面 */
+
+.course-list {
+  display: grid;
+  gap: 0;
+}
+
+.course-card__meta {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: 4px 0;
+}
+
+.chapter-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chapter-list__item {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.chapter-list__item:last-child {
+  border-bottom: none;
+}
+
+.chapter-list__order {
+  flex: 0 0 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 24px;
+}
+
+.chapter-list__title,
+.chapter-list__meta {
+  margin: 0;
+}
+
+.chapter-list__meta {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.stage-indicator {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.runtime-source {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.demo-switch {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.answer-content p {
+  margin: 0 0 12px;
+}
+
+.answer-content p:last-child {
+  margin-bottom: 0;
+}
+
+.citation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.citation-list__item + .citation-list__item {
+  margin-top: 12px;
+}
+
+.citation-list__source {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.citation-list__snippet {
+  margin: 4px 0 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.follow-up-list {
+  margin: 0;
+  padding-left: 20px;
+}
