@@ -207,11 +207,17 @@ S1 聚合内核与本文端点已在分支 `feat/analytics-aggregation` 实现
 该实现跑在**固定合成事件与内存状态**上，尚未接 M5 的真实 `learning_events` 表，
 因此**不是**本契约已验收的证据，也不代表 S1 完成。
 
+与已合并的上游契约（`learning-events.md`）逐条核对过：`eventId` 校验用其冻结格式
+（`event_` + 32 位小写 hex）；`isCorrect` / `score` 可空按「`null` 不等同 `false`」处理，
+未判分不入错误率分母；题型从提交事件取值（判分事件不带 `questionType`）。
+
 ## 待确认事项
 
 - [ ] M2 确认字段与未知/样本不足的展示约定（尤其是 `MetricNumber`、`coverage`、`weakestChapter` 的三态区分）
 - [ ] M1 确认：404 统一策略、`dataThrough` 口径、router 挂载方式
-- [ ] M5 确认：`submissionId` 去重与主观题判分口径与 learning 契约一致（PR #26）
+- [ ] M5 确认：`submissionId` 去重与主观题判分口径与 learning 契约一致
+      （该契约已合并进 main，其「M6 消费建议」新增了「`null` 不等同 `false`」的要求，
+      本文「未判分不入分母」与之对齐）
 - [ ] 确认后本文转为冻结版；实现见 `apps/api/app/domains/analytics`
 
 此清单未勾选即未确认，不以 AI 自评代替成员评审。
