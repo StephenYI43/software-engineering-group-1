@@ -1,0 +1,25 @@
+{
+  "scenario": "speak 正常播报至完成",
+  "description": "M2 收到 tutoring SSE completed（isComplete: true）后，用完整回答调用 speak。组件先发出 avatar_playback_started，播报结束后发出 avatar_playback_completed。",
+  "calls": [
+    {
+      "method": "speak",
+      "input": {
+        "utteranceId": "utt_5e2b8a01",
+        "text": "我们先不急着写出定义。你想一想，说「当 x 靠近 a 时 f(x) 趋近 L」，这里的「靠近」应该怎么精确描述呢？",
+        "emotion": "encouraging",
+        "action": "nod"
+      }
+    }
+  ],
+  "expectedEvents": [
+    {
+      "type": "avatar_playback_started",
+      "utteranceId": "utt_5e2b8a01"
+    },
+    {
+      "type": "avatar_playback_completed",
+      "utteranceId": "utt_5e2b8a01"
+    }
+  ]
+}

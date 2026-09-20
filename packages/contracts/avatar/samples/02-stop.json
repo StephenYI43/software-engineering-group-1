@@ -1,0 +1,32 @@
+{
+  "scenario": "播报中调用 stop，重复 stop 幂等",
+  "description": "speak 开始后、completed 之前调用 stop：当前 utteranceId 恰好产生一次 avatar_playback_stopped（reason 为 client_stop）。随后重复调用 stop 是 no-op，不再产生任何事件。",
+  "calls": [
+    {
+      "method": "speak",
+      "input": {
+        "utteranceId": "utt_1c7d94f2",
+        "text": "看这条极限定义：对于任意给定的正数 ε，总存在正数 δ……我们先盯住「任意给定」这四个字。",
+        "emotion": "thinking",
+        "action": "point"
+      }
+    },
+    {
+      "method": "stop"
+    },
+    {
+      "method": "stop"
+    }
+  ],
+  "expectedEvents": [
+    {
+      "type": "avatar_playback_started",
+      "utteranceId": "utt_1c7d94f2"
+    },
+    {
+      "type": "avatar_playback_stopped",
+      "utteranceId": "utt_1c7d94f2",
+      "reason": "client_stop"
+    }
+  ]
+}
