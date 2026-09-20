@@ -33,6 +33,11 @@
 `last7d` / `last30d` 的定义：以 `timezone` 下的**当日 00:00 为终点**，向前取 7 / 30 个自然日，
 区间左闭右开。服务端**不得**依赖服务器本地时区（`docs/code-standards.md:55`：API 用 UTC，UI 按用户时区显示）。
 
+`days` 的语义是**区间覆盖的自然日数**（按 `timezone`）：由于 `to` 不含，
+取区间内最后一个被包含的时刻定日。`last7d` 恰好是 7，`last30d` 恰好是 30；
+`custom` 则按实际跨越的日数给出（如 `2026-09-15T00:00Z` 到 `2026-09-17T00:00Z`
+在 `Asia/Shanghai` 下跨 3 个自然日）。
+
 日界时区必须显式声明，因为「学生 × 日」是聚合维度（event-consumption.md 聚合边界）：
 同一批事件在 `Asia/Shanghai` 与 `UTC` 下会落入不同的「日」。
 
@@ -147,6 +152,10 @@ S1 没有上报时长的学习事件（M4 的专注计时事件尚未定义）�
   上限 `3600 秒`（防止长间隔挂机虚增）；
 - 学生周期时长 = 其各会话时长之和，按 `timezone` 日界切分为「学生 × 日」。
 
+两个参数的关系需要留意：相邻间隔一旦超过 15 分钟就切成新会话，
+因此 3600 秒上限只在「同一会话内高频事件跨 1 小时以上」时生效
+（如每 10 分钟一条、连续 70 分钟 → 计 3600 秒）。
+
 **这是过渡口径，不是测量值。** 待 M4 的专注计时事件就绪后，切换为累加上报时长，
 `algorithm` 变为 `focus_timer_v1`，M2 可据此区分口径；切换只改聚合实现的一处，
 响应结构不变。
@@ -156,6 +165,9 @@ S1 没有上报时长的学习事件（M4 的专注计时事件尚未定义）�
 - **题型**：每个 `submissionId` 取「`occurredAt` 最新且 `isCorrect` 非 null 的事件」判定对错。
   `assignment_submitted` 与 `assignment_graded` 都可用于判定（客观题提交即判分场景只发前者）；
   主观题未判分（`isCorrect` 为 null）**不计入分母**——未判分不是错误。
+  题型本身取自**提交事件**：`assignment_graded` 的 payload 不含 `questionType`
+  （M5 契约），故同一 `submissionId` 的判分沿用该提交已登记的题型，
+  避免题型维度被丢成 `unknown`（后者只表示提交事件确实没给题型）。
 - **章节**：来自 `mistake_recorded` 计数，`resolvedCount` 来自 `mistake_resolved`。
   本周期无错题的章节**不出现在结果里**，不返回 0 行。
 - **提交数**：按 `submissionId` 去重。即使消费侧收到同一 `submissionId` 的重复事件
@@ -183,6 +195,17 @@ S1 没有上报时长的学习事件（M4 的专注计时事件尚未定义）�
 - 响应头 `Cache-Control: no-store`（统计随事件消费持续变化，不能缓存给教师看旧数）。
 - M6 提供 `APIRouter`；**挂载进 app factory 由 M1 协调**（`docs/team-plan.md:27`，`apps/api/app/main.py` 属 M1）。
   M6 不直接改公共入口文件。
+
+## 实现进度（2026-09-20）
+
+S1 聚合内核与本文端点已在分支 `feat/analytics-aggregation` 实现
+（`apps/api/app/domains/analytics`）：事件模型、`(occurredAt, eventId)` 游标、
+`eventId` 幂等去重、会话推断时长、题型/章节薄弱点、契约错误码与 `MetricNumber`。
+本地跑通 `ruff format --check` / `ruff check` / `mypy` / `pytest`
+（95 例，覆盖率 100%，CI 门槛 80%），并把接口响应与本文样例 01 逐字段比对一致。
+
+该实现跑在**固定合成事件与内存状态**上，尚未接 M5 的真实 `learning_events` 表，
+因此**不是**本契约已验收的证据，也不代表 S1 完成。
 
 ## 待确认事项
 
