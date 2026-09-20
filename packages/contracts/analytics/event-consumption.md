@@ -1,12 +1,12 @@
 # 学习事件消费契约（M6 消费侧，S1）
 
 本文定义 M6 如何从 `learning_events` 表消费事件并聚合统计。
-发布侧 schema 由 M5 的 [learning-events.md](../learning/learning-events.md)（PR #26，未合并）定义，
+发布侧 schema 由 M5 的 [learning-events.md](../learning/learning-events.md)（已合并进 main）定义，
 本文不重复定义事件字段，只定义**消费侧语义**。
 
-引用约定：`learning-events.md` 指 PR #26 分支上的
-`packages/contracts/learning/learning-events.md`（M6 已于 2026-09-15 在 Issue #7 评审），
-其行号以合并时的版本为准，故本文不引用其行号；
+引用约定：`learning-events.md` 指 `packages/contracts/learning/learning-events.md`
+（随 PR #26 合并进 main，提交 `aea3b6f`；M6 已于 2026-09-15 在 Issue #7 评审，
+两处修订已落地）。其行号会随修订漂移，故本文只引用小节名；
 带 `docs/` 前缀的为仓库根相对路径。
 
 ## 目标与边界
