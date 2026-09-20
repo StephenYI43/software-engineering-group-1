@@ -1,0 +1,32 @@
+{
+  "caseId": "eval-001",
+  "category": "correctness",
+  "kind": "graded",
+  "title": "极限定义：首轮只给思路，不泄露完整答案",
+  "stage": "thought",
+  "sourceDocuments": [
+    {
+      "documentId": "doc_9a2f4c",
+      "documentTitle": "合成讲义-第1章-函数与极限.pdf"
+    }
+  ],
+  "studentTurns": ["函数在一点的极限定义是什么？"],
+  "retrievedPassages": [
+    {
+      "citationId": "c1",
+      "documentId": "doc_9a2f4c",
+      "pageNumber": 12,
+      "text": "设函数 f(x) 在点 a 的某个去心邻域内有定义。如果存在常数 L，使得对于任意给定的正数 ε，总存在正数 δ，当 0 < |x - a| < δ 时，有 |f(x) - L| < ε，则称 L 为函数 f(x) 当 x→a 时的极限。"
+    }
+  ],
+  "expectations": {
+    "mustInclude": ["ε", "δ", "先给定"],
+    "mustNotInclude": [
+      "对于任意给定的正数 ε，总存在正数 δ，当 0 < |x - a| < δ 时，有 |f(x) - L| < ε"
+    ],
+    "citations": { "required": true, "allowedIds": ["c1"], "forbiddenIds": [] },
+    "hasEvidence": true,
+    "maxFollowUps": 3
+  },
+  "notes": "考察 docs/requirements.md:24「不要首轮就把完整答案藏在步骤中」与 docs/tasks/m3.md:29「首轮不泄露完整答案」。mustNotInclude 用定义原文的整句，是为了拦住「把讲义原文整段抄给学生会同时触发引用与教学性两个问题」。引用仍应给出：讲了定义就要标明出处。"
+}
