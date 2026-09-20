@@ -6,24 +6,25 @@
 
 状态：**草案**。消费侧语义（游标、去重）已经 M1 于 2026-09-15 在
 [Issue #7 评论](https://github.com/StephenYI43/software-engineering-group-1/issues/7#issuecomment-5677225000) 中确认方向；
-**仍待 M5 / M1 对本文按条评审确认**。确认前不编写生产代码。
+**仍待 M5 / M1 对本文按条评审确认**。[statistics-api.md](statistics-api.md) 同为草案，待 M2 评审。
 
 ## 文件
 
 | 文件 | 内容 |
 | --- | --- |
 | [event-consumption.md](event-consumption.md) | 学习事件的消费方式、消费位点（游标）、幂等去重、聚合边界 |
-| [samples/](samples/) | 游标状态等样例，供评审与实现对照 |
+| [statistics-api.md](statistics-api.md) | **M6 → M2** 班级学习统计查询契约（端点、未知状态、样本量、聚合口径） |
+| [samples/](samples/) | 游标状态、统计响应与错误样例，供评审与实现对照 |
 
 ## 上下游
 
 | 方向 | 对端 | 内容 | 依据 |
 | --- | --- | --- | --- |
 | 上游（M6 消费） | M2 / M4 / M5 | 学习事件，六公共字段 | `docs/code-standards.md:91`、M5 的 [learning-events.md](../learning/learning-events.md)（PR #26，未合并） |
-| 下游（M2 消费） | M2 | 时长、掌握度、统计周期、样本数、未知状态 | `docs/code-standards.md:92` |
+| 下游（M2 消费） | M2 | 班级统计查询接口：时长、薄弱点、统计周期、样本数、未知状态 | `docs/code-standards.md:92`、[statistics-api.md](statistics-api.md) |
 
-M6 → M2 的**统计展示契约**（掌握度雷达、周报等）不在本目录当前文件内，
-将在 S2 之前另出文件并请 M2 评审；本目录现阶段只落 S1 的事件消费契约。
+M6 → M2 的**统计展示契约**现由 [statistics-api.md](statistics-api.md) 承担（S1 班级概览）。
+雷达图掌握度、周报等 S2 增量仍将在 S2 之前另出文件并请 M2 评审。
 
 ## 依赖现状（如实记录）
 
@@ -39,9 +40,14 @@ M6 → M2 的**统计展示契约**（掌握度雷达、周报等）不在本目
 - [ ] M5 确认轮询消费方式、`learning_events` 表的读取授权与列名映射
 - [ ] M1 确认游标排序键（`occurredAt` 主序、`eventId` 同时间戳 tie-breaker）与 analytics 域建表迁移顺序
 - [ ] M2 确认 `chapter_viewed` 事件由 M2 发布时的 schema（M5 契约中已列为待 M2 定义）
+- [ ] M2 确认 [statistics-api.md](statistics-api.md) 的字段与展示约定（未知状态、样本量、覆盖率）
 - [ ] learning-events.md 两处修订（payload 可空标注、eventId 格式）合并后，本契约转冻结
 
 此清单未勾选即未确认，不以 AI 自评代替成员评审。
+
+「确认前不编写生产代码」的范围限于**对接 M5 真实 `learning_events` 表**的消费与聚合实现
+（表结构与列名映射未核对前写就是返工）。M6 基于**合成事件**的聚合内核原型不在此限，
+但它不是 S1 完成的证据，且不改动本目录已确认的语义。
 
 ## 变更流程
 
