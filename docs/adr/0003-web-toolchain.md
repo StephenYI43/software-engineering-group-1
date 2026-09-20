@@ -1,6 +1,7 @@
 # ADR-0003：Web 前端工具链与工程结构基线
 
-状态：提议（M2 已提交实装验证，待非作者评审；不代表全员已批准）
+状态：提议（M2 已提交实装验证；**本 ADR 已由 M1 评审批准并合并**，但按 `CONTRIBUTING.md:45` 不表示全员已批准）
+实装：#23 已按本 ADR 建立真实工作区与 Web CI，并关闭了「未验证项」中的三项（见下）
 日期：2026-09-15
 提出人：M2 / @Saber-www
 评审人：M1 / @StephenYI43（Node、pnpm 可复现性、CI、统一开发环境）；M6 / @xk1024（同一 Web 工程的消费者）；涉及根级 workspace 跨模块组织，M4 / @haoxuanluo351-lgtm 评审 `packages/avatar` 相关部分
@@ -89,11 +90,14 @@ corepack prepare pnpm@11.27.0 --activate
 
 | 组件 | 版本 | 说明 |
 | --- | --- | --- |
-| Node | 24.21.0（Krypton LTS） | 见下方「未验证项」 |
+| Node | 24.21.0（Krypton LTS） | 由 `.node-version` 固定，本地与 CI 读同一文件 |
+| Corepack | 0.36.0 | 随 Node 24.21.0 提供；pnpm 经它获取（M1 在 #23 指定的口径） |
 | pnpm | 11.27.0 | 写入 `packageManager` |
 | TypeScript | 6.0.3 | **不使用 7.0.2**，理由见决策二 |
 | react / react-dom | 19.3.0 | |
 | @types/react / @types/react-dom | 19.3.0 | |
+| @types/node | 24.13.6 | 与 Node 24 主线对齐，供 `vite.config.ts` 解析路径 |
+| react-router | 7.18.4 | 见下方「补充决策」 |
 | vite | 8.3.0 | |
 | @vitejs/plugin-react | 6.1.1 | |
 | eslint | 10.10.0 | |
@@ -102,6 +106,14 @@ corepack prepare pnpm@11.27.0 --activate
 | vitest | 4.1.11 | **不使用 5.0.0** |
 | @testing-library/react | 16.3.3 | |
 | jsdom | 30.0.1 | |
+
+#### 补充决策（#23 实装时新增，合并前经评审）
+
+**路由库取 `react-router` 7.18.4。** 本 ADR 首次提交时未覆盖路由库。实装时按「保守可验证」原则选定：8.x 大版本首发于 2026-06-17（三个月），7.x 主线已两年且 peer 为 `react >=18`，与我们的 React 19.3.0 兼容。此依赖新增按 `docs/code-standards.md:5` 在本 ADR 中说明理由。
+
+**`@types/node` 取 24.13.6 而非 latest（26.x）。** 类型包版本应与运行时主线对齐，取超前的版本会引入运行时尚不存在的能力。
+
+**eslint 的忽略需用 `**/dist/**` 而非 `dist/**`。** 本 ADR 原文写的是字面 `dist/**`，但那是相对配置文件的路径，在工作区下**覆盖不到 `apps/web/dist`**——实装时据此证伪：去掉后 `pnpm lint` 报 `apps/web/dist/assets/*.js was not found by the project service`。已按后者实现。
 
 ### 目录与共享文件
 
@@ -135,10 +147,13 @@ pnpm build         # vite build
 
 ### 必要的忽略规则（实装踩到，必须写进配置）
 
-两条规则不是风格偏好，**缺失会直接让 CI 失败**：
+两条规则不是风格偏好，**缺失会直接让 CI 失败**。#23 实装时对两者都做过证伪（临时移除规则后确认命令确实报错），并在过程中发现下面两处需要修正：
 
-1. **ESLint 需忽略自身配置文件**。`projectService` 会尝试把 `eslint.config.js` 纳入类型工程，而它不在 `tsconfig.json` 的 `include` 内，报 `Parsing error: ... was not found by the project service`。配置中须有 `{ ignores: ['dist/**', 'eslint.config.js'] }`。
+1. **ESLint 需忽略构建产物、自身配置文件与后端虚拟环境**。`projectService` 会尝试把这些纳入类型工程，而它们不在任何 `tsconfig.json` 的 `include` 内，报 `Parsing error: ... was not found by the project service`。实测触发源有三个：`eslint.config.js` 本身、`apps/web/dist/assets/*.js`、以及 `apps/api/.venv/` 里混入的 JS 资源。
+   - **本 ADR 原文写的 `dist/**` 不够**：那是相对配置文件的路径，覆盖不到 `apps/web/dist`。须用 `**/dist/**`。
 2. **Prettier 需忽略构建产物与锁文件**。否则 `dist/`、`pnpm-lock.yaml` 会被判定格式不合规，`format:check` 必然失败。须有 `.prettierignore` 含 `dist`、`node_modules`、`pnpm-lock.yaml`。
+
+此外 `.prettierignore` 还排除了 `apps/api`、`docs`、`packages/contracts`、`.github`：前端 CI 只应校验前端自己的代码，否则 Web CI 会因为其他成员尚未 Prettier 化的文档而变红，而「修复」意味着去重排别人的文件。若团队决定做仓库级格式化，见「后续工作」第 6 条。
 
 ### 对其他成员的影响
 
@@ -185,10 +200,12 @@ src/Unsafe.tsx 2:9  error  Unsafe assignment of an `any` value  @typescript-esli
 
 ### 未验证项（不得当作已验证）
 
-1. **Node 版本**：验证在 **v24.15.0**（本机现状）完成，而本 ADR 推荐 **24.21.0**。两者同属 Node 24 LTS，但 **24.21.0 未实际安装验证**。落地时须在 24.21.0 上重跑一次链路，或改推荐为 24.15.0。
-2. **根级 workspace**：验证工程为单包，**workspace 结构本身未实装验证**。跨包 import 的 tsconfig / ESLint project service 配置须在 #23 中实测。
-3. **CI**：前端 CI 尚未存在，本 ADR 只给命令基线，不声称已接入。
-4. **`packages/avatar`**：仅声明为 workspace 成员，未验证 M4 的包在 workspace 下可正常构建。
+**#23 已关闭其中三项**，过程与证据见该 Issue 的 PR；一项仍未验证：
+
+1. ~~**Node 版本**~~ —— **已关闭**（2026-09-15，PR #25 评审期间补测）。已在 Node 24.21.0 上清空 `node_modules` 后以 `--frozen-lockfile` 重建，五项命令全部 exit 0。
+2. ~~**根级 workspace**~~ —— **已关闭**（#23）。真实根级工作区已建成，跨包消费实测通过：`apps/web` 经 Vite alias 直接引 `packages/ui` 源码，dev 下解析为 `/@fs/.../packages/ui/src/index.ts`，构建产出 43 个模块。
+3. ~~**CI**~~ —— **已关闭**（#23）。`.github/workflows/web-ci.yml` 已建立，用 `node-version-file: .node-version` 精确取 24.21.0，并有**会失败的版本断言**（而非仅打印）。
+4. **`packages/avatar`（仍未验证）**：仅声明为 workspace 成员，M4 尚未建立该包。`pnpm-workspace.yaml` 用 `packages/*` 通配符，M4 建好 `package.json` 即自动纳入，无需改配置——但**这一条要等 M4 实际建包后才能真正关闭**。
 
 ### 迁移
 
@@ -200,11 +217,12 @@ src/Unsafe.tsx 2:9  error  Unsafe assignment of an `any` value  @typescript-esli
 
 ## 后续工作
 
-1. **#23**：按本 ADR 建立 `apps/web` 工程壳与 `packages/ui` 骨架，并在其中实测 workspace 跨包消费（本 ADR 的未验证项 2）。
-2. **M1**：接入前端 CI（命令基线见上）；确认 Node 版本口径（未验证项 1）。
-3. **M6**：基于同一工程壳挂载教师端路由；不初始化第二套 `package.json` / lockfile。
-4. **M4**：确认 `packages/avatar` 作为 workspace 成员的组织方式。
+1. ~~**#23**：按本 ADR 建立工程壳并实测 workspace 跨包消费~~ —— 已完成。
+2. ~~**前端 CI**~~ —— 已完成（`.github/workflows/web-ci.yml`）。
+3. **M6**：基于同一工程壳挂载教师端路由；不初始化第二套 `package.json` / lockfile。`apps/web/src/features/teacher/routes/index.tsx` 已留好挂载点，无需修改根 router。
+4. **M4**：建立 `packages/avatar` 后自动纳入工作区（`packages/*` 通配符），届时关闭未验证项 4。
 5. 若 typescript-eslint 后续支持 TypeScript 7，另提 ADR 评估升级。
+6. 若团队决定做仓库级的文档格式化，那是一个独立的全仓任务，需由 M1 协调统一执行，并在那一次改动里移除 `.prettierignore` 中对 `docs`、`packages/contracts` 的排除。
 
 ## 与 ADR-0001 的关系
 

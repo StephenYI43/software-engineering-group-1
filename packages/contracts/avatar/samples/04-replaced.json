@@ -1,0 +1,43 @@
+{
+  "scenario": "播报中再次 speak，新播报替换旧播报",
+  "description": "utt_a04e21c8 播报中调用第二次 speak：旧 utteranceId 恰好产生一次 avatar_playback_stopped（reason 为 replaced），且先于新 utteranceId 的 avatar_playback_started 分发；此后旧 utteranceId 不再产生任何事件。新播报正常开始并完成。",
+  "calls": [
+    {
+      "method": "speak",
+      "input": {
+        "utteranceId": "utt_a04e21c8",
+        "text": "我们把这道题拆成三步。第一步，先判断能不能直接代入……",
+        "emotion": "thinking",
+        "action": "write"
+      }
+    },
+    {
+      "method": "speak",
+      "input": {
+        "utteranceId": "utt_b77f10e3",
+        "text": "先停一下——你刚才那一步代入是对的，我们换个更简单的例子重新看。",
+        "emotion": "encouraging",
+        "action": "nod"
+      }
+    }
+  ],
+  "expectedEvents": [
+    {
+      "type": "avatar_playback_started",
+      "utteranceId": "utt_a04e21c8"
+    },
+    {
+      "type": "avatar_playback_stopped",
+      "utteranceId": "utt_a04e21c8",
+      "reason": "replaced"
+    },
+    {
+      "type": "avatar_playback_started",
+      "utteranceId": "utt_b77f10e3"
+    },
+    {
+      "type": "avatar_playback_completed",
+      "utteranceId": "utt_b77f10e3"
+    }
+  ]
+}

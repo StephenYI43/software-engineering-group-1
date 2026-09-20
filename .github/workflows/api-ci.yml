@@ -2,7 +2,7 @@ name: API CI
 
 on:
   push:
-    branches: [main, "codex/feat/m1-api-bootstrap"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
