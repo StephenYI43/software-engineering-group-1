@@ -32,6 +32,7 @@ export function parseMockScenario(search: string): MockScenario {
 /** 契约样例 01：混合情形（2 名有数据 + 1 名无事件 + 样本不足标记）。 */
 const OVERVIEW_WITH_DATA: ClassOverview = {
   classId: 'class_mock_c01',
+  courseId: 'course_mock_c01',
   period: {
     from: '2026-09-09T16:00:00Z',
     to: '2026-09-16T16:00:00Z',
@@ -39,6 +40,7 @@ const OVERVIEW_WITH_DATA: ClassOverview = {
     days: 7,
   },
   dataThrough: '2026-09-16T09:20:00Z',
+  consumption: { dataState: 'complete', upstreamWatermark: '2026-09-16T09:20:00Z' },
   generatedAt: '2026-09-17T01:00:00Z',
   summary: {
     totalDurationSeconds: { state: 'known', value: 3540, algorithm: 'session_inference_v1' },
@@ -68,44 +70,51 @@ const OVERVIEW_WITH_DATA: ClassOverview = {
       },
     ],
   },
-  students: [
-    {
-      userId: 'user_mock_s01',
-      displayName: '合成学生 01',
-      dataState: 'known',
-      durationSeconds: { state: 'known', value: 1680, algorithm: 'session_inference_v1' },
-      submissionCount: { state: 'known', value: 2 },
-      weakestChapter: {
-        key: 'chapter_mock_c02',
-        label: null,
-        mistakeCount: 1,
-        resolvedCount: 1,
-        sampleSize: 1,
-        insufficientSample: true,
+  students: {
+    page: 1,
+    pageSize: 50,
+    total: 3,
+    items: [
+      {
+        userId: 'user_mock_s01',
+        displayName: '合成学生 01',
+        dataState: 'known',
+        durationSeconds: { state: 'known', value: 1680, algorithm: 'session_inference_v1' },
+        submissionCount: { state: 'known', value: 2 },
+        weakestChapter: {
+          key: 'chapter_mock_c02',
+          label: null,
+          mistakeCount: 1,
+          resolvedCount: 1,
+          sampleSize: 1,
+          insufficientSample: true,
+        },
       },
-    },
-    {
-      userId: 'user_mock_s02',
-      displayName: '合成学生 02',
-      dataState: 'known',
-      durationSeconds: { state: 'known', value: 1860, algorithm: 'session_inference_v1' },
-      submissionCount: { state: 'known', value: 1 },
-      weakestChapter: null,
-    },
-    {
-      userId: 'user_mock_s03',
-      displayName: '合成学生 03',
-      dataState: 'unknown',
-      durationSeconds: { state: 'unknown', reason: 'no_events_in_period' },
-      submissionCount: { state: 'unknown', reason: 'no_events_in_period' },
-      weakestChapter: null,
-    },
-  ],
+      {
+        userId: 'user_mock_s02',
+        displayName: '合成学生 02',
+        dataState: 'known',
+        durationSeconds: { state: 'known', value: 1860, algorithm: 'session_inference_v1' },
+        submissionCount: { state: 'known', value: 1 },
+        weakestChapter: null,
+      },
+      {
+        userId: 'user_mock_s03',
+        displayName: '合成学生 03',
+        dataState: 'unknown',
+        durationSeconds: { state: 'unknown', reason: 'no_events_in_period' },
+        // 无事件学生的提交数是已知 0（契约修订：无活动 ≠ 未知）
+        submissionCount: { state: 'known', value: 0 },
+        weakestChapter: null,
+      },
+    ],
+  },
 }
 
-/** 契约样例 02：尚未消费任何事件，全班都是未知（不能显示 0）。 */
+/** 契约样例 02：全班无活动（计数为已知 0，时长因缺乏观测为未知）。 */
 const OVERVIEW_WITHOUT_DATA: ClassOverview = {
   classId: 'class_mock_c01',
+  courseId: 'course_mock_c01',
   period: {
     from: '2026-09-09T16:00:00Z',
     to: '2026-09-16T16:00:00Z',
@@ -113,24 +122,30 @@ const OVERVIEW_WITHOUT_DATA: ClassOverview = {
     days: 7,
   },
   dataThrough: null,
+  consumption: { dataState: 'complete', upstreamWatermark: null },
   generatedAt: '2026-09-17T01:00:00Z',
   summary: {
     totalDurationSeconds: { state: 'unknown', reason: 'no_events_in_period' },
-    activeStudentCount: { state: 'unknown', reason: 'no_events_in_period' },
-    submissionCount: { state: 'unknown', reason: 'no_events_in_period' },
+    activeStudentCount: { state: 'known', value: 0 },
+    submissionCount: { state: 'known', value: 0 },
     coverage: { studentCount: 3, studentsWithData: 0, studentsWithoutData: 3 },
   },
   weakPoints: {
     byQuestionType: [],
     byChapter: [],
   },
-  students: OVERVIEW_WITH_DATA.students.map((student) => ({
-    ...student,
-    dataState: 'unknown' as const,
-    durationSeconds: { state: 'unknown' as const, reason: 'no_events_in_period' as const },
-    submissionCount: { state: 'unknown' as const, reason: 'no_events_in_period' as const },
-    weakestChapter: null,
-  })),
+  students: {
+    page: 1,
+    pageSize: 50,
+    total: 3,
+    items: OVERVIEW_WITH_DATA.students.items.map((student) => ({
+      ...student,
+      dataState: 'unknown' as const,
+      durationSeconds: { state: 'unknown' as const, reason: 'no_events_in_period' as const },
+      submissionCount: { state: 'known' as const, value: 0 },
+      weakestChapter: null,
+    })),
+  },
 }
 
 /** 契约错误体（`{ code, message, requestId, details }`，code-standards.md:73）。 */

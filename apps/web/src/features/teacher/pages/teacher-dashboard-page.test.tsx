@@ -31,7 +31,7 @@ describe('教师端班级概览页', () => {
     expect(screen.getByRole('note').textContent).toContain('示意数据')
   })
 
-  it('无事件的学生显示「暂无数据」，不显示 0', async () => {
+  it('无事件的学生时长显示「暂无数据」，不显示 0', async () => {
     renderAt('')
     await waitFor(() => {
       expect(screen.getByText('班级学习时长')).toBeDefined()
@@ -39,9 +39,14 @@ describe('教师端班级概览页', () => {
 
     expect(screen.getByText('合成学生 03')).toBeDefined()
     expect(screen.getAllByText('暂无数据').length).toBeGreaterThan(0)
-    // 未知不得被渲染成 0（`docs/tasks/m6.md:29` 验收）
+    // 未知不得被渲染成 0（`docs/tasks/m6.md:29` 验收）；时长缺乏观测，
+    // 必须显示「暂无数据」。提交数是已知 0，如实显示「0 次」（无活动 ≠ 未知）。
     expect(document.body.textContent ?? '').not.toContain('0 分钟')
-    expect(document.body.textContent ?? '').not.toContain('0 次')
+    const s03Row = screen
+      .getAllByRole('row')
+      .find((row) => row.textContent?.includes('合成学生 03'))
+    expect(s03Row?.textContent).toContain('0 次')
+    expect(s03Row?.textContent).toContain('暂无数据')
   })
 
   it('区分「无数据」与「本周期无错题」两种不同结论', async () => {
@@ -70,16 +75,20 @@ describe('教师端班级概览页', () => {
     expect(document.body.textContent ?? '').toContain('样本 2')
   })
 
-  it('全班无数据场景：汇总也是「暂无数据」，并说明尚未消费事件', async () => {
+  it('全班无活动场景：计数如实显示 0，时长为「暂无数据」', async () => {
     renderAt('?mock=no-data')
     await waitFor(() => {
       expect(screen.getByText('班级学习时长')).toBeDefined()
     })
 
     const text = document.body.textContent ?? ''
-    expect(text).toContain('尚未消费任何学习事件')
+    // 计数类指标是已知 0（无活动 ≠ 不可判断），必须如实显示
+    expect(text).toContain('0 人')
+    expect(text).toContain('0 次')
+    // 时长缺乏观测依据，显示「暂无数据」而不是 0
     expect(screen.getAllByText('暂无数据').length).toBeGreaterThan(3)
     expect(text).not.toContain('0 分钟')
+    expect(text).toContain('本周期未纳入任何学习事件')
   })
 
   it('错误场景展示错误信息与问题编号', async () => {

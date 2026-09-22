@@ -7,6 +7,7 @@ import {
 
 const OK_BODY = {
   classId: 'class_mock_c01',
+  courseId: 'course_mock_c01',
   period: {
     from: '2026-09-09T16:00:00Z',
     to: '2026-09-16T16:00:00Z',
@@ -14,15 +15,16 @@ const OK_BODY = {
     days: 7,
   },
   dataThrough: null,
+  consumption: { dataState: 'complete', upstreamWatermark: null },
   generatedAt: '2026-09-17T01:00:00Z',
   summary: {
     totalDurationSeconds: { state: 'unknown', reason: 'no_events_in_period' },
-    activeStudentCount: { state: 'unknown', reason: 'no_events_in_period' },
-    submissionCount: { state: 'unknown', reason: 'no_events_in_period' },
+    activeStudentCount: { state: 'known', value: 0 },
+    submissionCount: { state: 'known', value: 0 },
     coverage: { studentCount: 3, studentsWithData: 0, studentsWithoutData: 3 },
   },
   weakPoints: { byQuestionType: [], byChapter: [] },
-  students: [],
+  students: { page: 1, pageSize: 50, total: 0, items: [] },
 }
 
 function stubFetch(response: Response | Error) {

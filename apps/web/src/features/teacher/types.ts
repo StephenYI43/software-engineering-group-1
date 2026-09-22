@@ -35,6 +35,13 @@ export type Period = {
   days: number
 }
 
+/** 消费完整度声明：页面不得把 `partial` / `unknown` 当作完整统计展示。 */
+export type Consumption = {
+  dataState: 'complete' | 'partial' | 'unknown'
+  /** 上游事件源已知的最新事件位置；null 表示上游尚无事件或水位不可得。 */
+  upstreamWatermark: string | null
+}
+
 export type Coverage = {
   studentCount: number
   studentsWithData: number
@@ -68,11 +75,22 @@ export type StudentOverview = {
   weakestChapter: ChapterWeakPoint | null
 }
 
+/** 学生明细分页信封（契约修订：students 不再是全量数组）。 */
+export type StudentPage = {
+  page: number
+  pageSize: number
+  total: number
+  items: StudentOverview[]
+}
+
 export type ClassOverview = {
   classId: string
+  /** `classId` 关联的课程 ID；页面可经 M5 章节接口解析章节标题，映射缺失时为 null。 */
+  courseId: string | null
   period: Period
-  /** 消费位点：统计只覆盖到该时刻；`null` 表示尚未消费任何事件。 */
+  /** 本响应纳入的最新事件发生时间（限定查询周期）；不是可恢复的消费位点。 */
   dataThrough: string | null
+  consumption: Consumption
   generatedAt: string
   summary: {
     totalDurationSeconds: MetricNumber
@@ -84,7 +102,7 @@ export type ClassOverview = {
     byQuestionType: QuestionTypeWeakPoint[]
     byChapter: ChapterWeakPoint[]
   }
-  students: StudentOverview[]
+  students: StudentPage
 }
 
 /** 示意数据的显式标记（`AGENTS.md:4`：Mock 必须明确标记）。 */

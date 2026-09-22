@@ -17,12 +17,15 @@ import '../teacher-dashboard.css'
  * 数据来自 M6 自己的统计契约
  * （`packages/contracts/analytics/statistics-api.md`，PR #37）；后端实现在 PR #38。
  *
- * 页面遵循契约的三条展示约束：
- * 1. **未知不显示 0**：周期内无事件的学生显示「暂无数据」，而不是「0 分钟」；
- * 2. **三态必须区分**：「暂无数据」（无事件）/「本周期无错题」（有数据但没错题）/
+ * 页面遵循契约的展示约束：
+ * 1. **未知不显示 0、已知 0 不显示未知**：无事件学生的时长显示「暂无数据」；
+ *    计数类指标在周期内确实无事件时是已知 0，如实显示 0（无活动 ≠ 不可判断）；
+ * 2. **三态必须区分**：「暂无数据」（无观测）/「本周期无错题」（有数据但没错题）/
  *    正常值——把它们混为一谈会给出错误结论；
  * 3. **样本量与口径必须可见**：薄弱点标注样本量，样本不足的条目显式提示；
- *    时长标注算法口径，避免把过渡口径当成测量值。
+ *    时长标注算法口径，避免把过渡口径当成测量值；
+ * 4. **消费完整度必须可见**：`consumption` 为 `partial` / `unknown` 时显式提示
+ *    「数据仍在同步」，不得当作完整统计展示。
  *
  * 权限不在本页：教师仅见授权班级由 M1 的鉴权层与 API 层保证，
  * 页面不自行过滤权限、也不靠隐藏菜单表达权限（`docs/code-standards.md:104`）。
@@ -160,9 +163,14 @@ function DashboardBody({ overview, isFixture }: { overview: ClassOverview; isFix
       </p>
       <p className="teacher-dashboard__meta">
         {overview.dataThrough === null
-          ? '尚未消费任何学习事件，全班数据均不可用'
+          ? '本周期未纳入任何学习事件'
           : `数据截止 ${formatInstant(overview.dataThrough, period.timezone)}`}
       </p>
+      {overview.consumption.dataState !== 'complete' && (
+        <p className="teacher-dashboard__meta teacher-metric--unknown">
+          数据仍在同步，当前统计可能不完整
+        </p>
+      )}
       <p className="teacher-dashboard__meta">
         覆盖情况：{coverage.studentCount} 名学生中 {coverage.studentsWithData} 名有数据、
         {coverage.studentsWithoutData} 名无数据。总时长为<strong>有数据学生</strong>之和，
@@ -206,7 +214,7 @@ function DashboardBody({ overview, isFixture }: { overview: ClassOverview; isFix
             </tr>
           </thead>
           <tbody>
-            {students.map((student) => (
+            {students.items.map((student) => (
               <tr key={student.userId}>
                 <td>{student.displayName ?? student.userId}</td>
                 <td>
