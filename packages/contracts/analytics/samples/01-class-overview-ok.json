@@ -1,5 +1,6 @@
 {
   "classId": "class_mock_c01",
+  "courseId": "course_mock_c01",
   "period": {
     "from": "2026-09-09T16:00:00Z",
     "to": "2026-09-16T16:00:00Z",
@@ -7,6 +8,10 @@
     "days": 7
   },
   "dataThrough": "2026-09-16T09:20:00Z",
+  "consumption": {
+    "dataState": "complete",
+    "upstreamWatermark": "2026-09-16T09:20:00Z"
+  },
   "generatedAt": "2026-09-17T01:00:00Z",
   "summary": {
     "totalDurationSeconds": {
@@ -50,45 +55,50 @@
       }
     ]
   },
-  "students": [
-    {
-      "userId": "user_mock_s01",
-      "displayName": "合成学生 01",
-      "dataState": "known",
-      "durationSeconds": {
-        "state": "known",
-        "value": 1680,
-        "algorithm": "session_inference_v1"
+  "students": {
+    "page": 1,
+    "pageSize": 50,
+    "total": 3,
+    "items": [
+      {
+        "userId": "user_mock_s01",
+        "displayName": "合成学生 01",
+        "dataState": "known",
+        "durationSeconds": {
+          "state": "known",
+          "value": 1680,
+          "algorithm": "session_inference_v1"
+        },
+        "submissionCount": { "state": "known", "value": 2 },
+        "weakestChapter": {
+          "key": "chapter_mock_c02",
+          "label": null,
+          "mistakeCount": 1,
+          "resolvedCount": 1,
+          "sampleSize": 1,
+          "insufficientSample": true
+        }
       },
-      "submissionCount": { "state": "known", "value": 2 },
-      "weakestChapter": {
-        "key": "chapter_mock_c02",
-        "label": null,
-        "mistakeCount": 1,
-        "resolvedCount": 1,
-        "sampleSize": 1,
-        "insufficientSample": true
+      {
+        "userId": "user_mock_s02",
+        "displayName": "合成学生 02",
+        "dataState": "known",
+        "durationSeconds": {
+          "state": "known",
+          "value": 1860,
+          "algorithm": "session_inference_v1"
+        },
+        "submissionCount": { "state": "known", "value": 1 },
+        "weakestChapter": null
+      },
+      {
+        "userId": "user_mock_s03",
+        "displayName": "合成学生 03",
+        "dataState": "unknown",
+        "durationSeconds": { "state": "unknown", "reason": "no_events_in_period" },
+        "submissionCount": { "state": "known", "value": 0 },
+        "weakestChapter": null
       }
-    },
-    {
-      "userId": "user_mock_s02",
-      "displayName": "合成学生 02",
-      "dataState": "known",
-      "durationSeconds": {
-        "state": "known",
-        "value": 1860,
-        "algorithm": "session_inference_v1"
-      },
-      "submissionCount": { "state": "known", "value": 1 },
-      "weakestChapter": null
-    },
-    {
-      "userId": "user_mock_s03",
-      "displayName": "合成学生 03",
-      "dataState": "unknown",
-      "durationSeconds": { "state": "unknown", "reason": "no_events_in_period" },
-      "submissionCount": { "state": "unknown", "reason": "no_events_in_period" },
-      "weakestChapter": null
-    }
-  ]
+    ]
+  }
 }
