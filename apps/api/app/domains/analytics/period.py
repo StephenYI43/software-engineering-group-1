@@ -1,7 +1,8 @@
 """统计周期解析。
 
-`last7d` / `last30d` 以查询时区下的当日 00:00 为终点，向前取 7 / 30 个自然日，
-区间左闭右开。日界时区必须显式确定，因为「学生 × 日」是聚合维度。
+`last7d` / `last30d` 以查询时区下生成时刻所处日的 00:00 为终点（不含今天），
+按本地日历日向前取 7 / 30 个自然日，区间左闭右开。日界时区必须显式确定，
+因为「学生 × 日」是聚合维度。
 """
 
 from __future__ import annotations
@@ -53,7 +54,9 @@ def resolve_period(query: PeriodQuery, now: datetime) -> Period:
     if query.period in PERIOD_DAYS:
         days = PERIOD_DAYS[query.period]
         end_local = datetime.combine(now.astimezone(tz).date(), time.min, tzinfo=tz)
-        start_local = end_local - timedelta(days=days)
+        # 按本地日历日回退，而不是从 end_local 做绝对 24h×days 回退：
+        # DST 时区下绝对回退的起点会落在相邻日期，区间变成 8/31 个自然日。
+        start_local = datetime.combine(end_local.date() - timedelta(days=days), time.min, tzinfo=tz)
         return Period(
             start=start_local.astimezone(UTC),
             end=end_local.astimezone(UTC),

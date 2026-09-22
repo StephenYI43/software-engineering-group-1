@@ -2,7 +2,8 @@
 
 固定事件集与 M6 教师端 S0 交付物
 `docs/prototypes/samples/learning-events-synthetic.jsonl` 同源（11 条合成事件），
-此处复制一份是为了让后端测试不依赖 docs 目录（该文件随独立 PR 合并）。
+此处复制一份是为了让后端测试不依赖 docs 目录（该文件已合并进 main；
+后端测试保留一份独立副本，避免跨目录依赖）。
 两处若出现差异，以本文件为准并同步更新 S0 样例。
 """
 
@@ -18,7 +19,12 @@ from typing import Any
 import pytest
 
 from app.domains.analytics.events import LearningEvent
-from app.domains.analytics.memory import InMemoryAnalyticsStore, InMemoryEventSource, StaticRoster
+from app.domains.analytics.memory import (
+    InMemoryAnalyticsStore,
+    InMemoryEventSource,
+    StaticCourseMap,
+    StaticRoster,
+)
 from app.domains.analytics.period import Period, PeriodQuery, resolve_period
 from app.domains.analytics.ports import StudentRef
 from app.domains.analytics.service import AnalyticsConsumer
@@ -100,11 +106,23 @@ def build_state() -> Callable[[Sequence[LearningEvent]], AnalyticsState]:
 
 
 CLASS_ID = "class_mock_c01"
+COURSE_ID = "course_mock_c01"
 
 
 @pytest.fixture
 def class_id() -> str:
     return CLASS_ID
+
+
+@pytest.fixture
+def course_id() -> str:
+    return COURSE_ID
+
+
+@pytest.fixture
+def course_map() -> StaticCourseMap:
+    """class_mock_c01 → course_mock_c01；其他班级映射缺失。"""
+    return StaticCourseMap({CLASS_ID: COURSE_ID})
 
 
 @pytest.fixture

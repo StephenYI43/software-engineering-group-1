@@ -25,6 +25,10 @@ class InMemoryEventSource:
         remaining = [event for event in self._events if cursor is None or Cursor.of(event) > cursor]
         return remaining[:limit]
 
+    def watermark(self) -> Cursor | None:
+        """上游已写入的最新事件位置（max by `Cursor.of`）；上游无事件返回 None。"""
+        return max((Cursor.of(event) for event in self._events), default=None)
+
 
 class InMemoryAnalyticsStore:
     """把聚合状态整体放在内存中。
@@ -54,3 +58,17 @@ class StaticRoster:
 
     def list_students(self, class_id: str) -> Sequence[StudentRef] | None:
         return self._classes.get(class_id)
+
+
+class StaticCourseMap:
+    """按班级 ID 返回固定课程 ID 的 `ClassCourseMapper` 实现，供测试与本地演示使用。
+
+    真实实现应查询 M5 课程域的 `classes.course_id`（经 M5 公开的 service 函数）；
+    不在表中的班级返回 None，表示映射缺失（统计视为无可归属事件）。
+    """
+
+    def __init__(self, courses: Mapping[str, str]) -> None:
+        self._courses = dict(courses)
+
+    def course_id_for(self, class_id: str) -> str | None:
+        return self._courses.get(class_id)

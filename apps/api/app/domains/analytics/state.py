@@ -31,12 +31,14 @@ class SubmissionRecord:
 
     `occurred_at` 取首次到达的时间，决定提交数归属哪个统计周期；
     `question_type` 记录题目类型——它属于题目属性，只有提交事件携带，
-    判分事件不带（M5 契约），故必须独立于判分结果保存。
+    判分事件不带（M5 契约），故必须独立于判分结果保存；
+    `course_id` 记录事件归属的课程，同一学生跨班时按课程隔离，防止串班。
     """
 
     submission_id: str
     user_id: str
     occurred_at: datetime
+    course_id: str | None = None
     question_type: str | None = None
 
 
@@ -50,6 +52,7 @@ class Judgement:
     occurred_at: datetime
     is_correct: bool
     from_graded_event: bool
+    course_id: str | None = None
 
 
 @dataclass
@@ -61,6 +64,7 @@ class MistakeRecord:
     chapter_id: str | None
     recorded_at: datetime
     resolved: bool = False
+    course_id: str | None = None
 
 
 @dataclass
@@ -72,8 +76,12 @@ class AnalyticsState:
     submissions: dict[str, SubmissionRecord] = field(default_factory=dict)
     judgements: dict[str, Judgement] = field(default_factory=dict)
     mistakes: dict[str, MistakeRecord] = field(default_factory=dict)
-    activity: dict[str, list[datetime]] = field(default_factory=dict)
-    """`userId` → 事件时刻列表。
+    activity: dict[str, dict[str | None, list[datetime]]] = field(default_factory=dict)
+    """`userId` → `courseId` → 事件时刻列表。
+
+    按 `courseId` 二级分组后，跨班级查询只取本课程时刻，避免同一学生跨班时
+    数据串班（statistics-api.md「数据隔离」）。`courseId` 为 None 的事件也登记，
+    但读侧按具体课程查询时会天然排除（查询 key 是具体 str）。
 
     S1 保留逐事件时刻是为了在读取时按查询时区切「学生 × 日」并做会话推断；
     真实实现应在会话关闭时把结果落聚合表，而不是长期保留事件级明细
@@ -90,7 +98,9 @@ class AnalyticsState:
     def apply(self, event: LearningEvent) -> None:
         """应用一条事件。调用前须用 `is_processed` 过滤已处理事件。"""
         self.processed_event_ids.add(event.event_id)
-        self.activity.setdefault(event.user_id, []).append(event.occurred_at)
+        self.activity.setdefault(event.user_id, {}).setdefault(event.course_id, []).append(
+            event.occurred_at
+        )
 
         if event.event_type in (EventType.ASSIGNMENT_SUBMITTED, EventType.ASSIGNMENT_GRADED):
             self._apply_submission(event)
@@ -113,6 +123,7 @@ class AnalyticsState:
                 submission_id=submission_id,
                 user_id=event.user_id,
                 occurred_at=event.occurred_at,
+                course_id=event.course_id,
                 question_type=question_type,
             )
             self.submissions[submission_id] = record
@@ -137,6 +148,7 @@ class AnalyticsState:
             occurred_at=event.occurred_at,
             is_correct=is_correct,
             from_graded_event=from_graded_event,
+            course_id=event.course_id,
         )
 
     def _apply_mistake_recorded(self, event: LearningEvent) -> None:
@@ -148,6 +160,7 @@ class AnalyticsState:
             user_id=event.user_id,
             chapter_id=optional_str(event.payload, "chapterId", event),
             recorded_at=event.occurred_at,
+            course_id=event.course_id,
         )
 
     def _apply_mistake_resolved(self, event: LearningEvent) -> None:

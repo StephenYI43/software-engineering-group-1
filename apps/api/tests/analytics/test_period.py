@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -25,6 +25,21 @@ def test_last_30_days_spans_30_local_days(request_time: datetime) -> None:
 
     assert period.days == 30
     assert period.end - period.start == timedelta(days=30)
+
+
+def test_last7d_falls_back_by_local_calendar_days_across_dst() -> None:
+    """2026-03-29 柏林切入夏令时：起点按本地日历日回退 7 天，而不是绝对 24h×7。
+
+    绝对回退会得到本地日期 03-21，区间变成 8 个自然日。
+    """
+    berlin = ZoneInfo("Europe/Berlin")
+    now = datetime(2026, 3, 29, 2, 0, tzinfo=UTC)
+
+    period = resolve_period(PeriodQuery(period="last7d", timezone="Europe/Berlin"), now)
+
+    assert period.start.astimezone(berlin).date() == date(2026, 3, 22)
+    assert period.end.astimezone(berlin).date() == date(2026, 3, 29)
+    assert period.days == 7
 
 
 def test_range_is_left_closed_right_open(request_time: datetime) -> None:

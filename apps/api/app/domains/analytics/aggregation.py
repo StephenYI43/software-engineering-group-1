@@ -3,6 +3,10 @@
 算法参数集中在本模块顶部，改动必须同步
 `packages/contracts/analytics/statistics-api.md`「聚合口径」。
 所有函数都是纯读取，不修改状态。
+
+所有查询都带 `course_id` 过滤：状态里的每条记录都记录了归属课程，
+只统计 `record.course_id == course_id` 的记录，同一学生跨班时数据互不串班；
+`courseId` 为 None 的事件因不等于任何具体课程 ID，永远不进任何班级。
 """
 
 from __future__ import annotations
@@ -51,27 +55,40 @@ class ChapterWeakPoint:
     insufficient_sample: bool
 
 
-def has_activity_in_period(state: AnalyticsState, user_id: str, period: Period) -> bool:
-    """该生在周期内是否有任何事件。无事件 = 未知，不能用 0 代替。"""
-    return any(period.contains(moment) for moment in state.activity.get(user_id, ()))
+def has_activity_in_period(
+    state: AnalyticsState, user_id: str, period: Period, course_id: str
+) -> bool:
+    """该生在周期内是否有任何本课程事件。无事件 = 未知，不能用 0 代替。"""
+    moments = state.activity.get(user_id, {}).get(course_id, ())
+    return any(period.contains(moment) for moment in moments)
 
 
-def duration_seconds(state: AnalyticsState, user_id: str, period: Period) -> int | None:
-    """该生周期内学习时长（秒）；周期内无事件返回 None。"""
-    times = [moment for moment in state.activity.get(user_id, ()) if period.contains(moment)]
+def duration_seconds(
+    state: AnalyticsState, user_id: str, period: Period, course_id: str
+) -> int | None:
+    """该生周期内本课程学习时长（秒）；周期内无事件返回 None。"""
+    times = [
+        moment
+        for moment in state.activity.get(user_id, {}).get(course_id, ())
+        if period.contains(moment)
+    ]
     if not times:
         return None
     return session_seconds(times, period.timezone)
 
 
-def submission_count(state: AnalyticsState, user_id: str, period: Period) -> int | None:
-    """该生周期内提交数（按 `submissionId` 去重）；周期内无事件返回 None。"""
-    if not has_activity_in_period(state, user_id, period):
-        return None
+def submission_count(state: AnalyticsState, user_id: str, period: Period, course_id: str) -> int:
+    """该生周期内本课程提交数（按 `submissionId` 去重）。
+
+    计数永远是已知数字：没有可归属的提交就是 0，不用 unknown
+    （statistics-api.md 契约修订「计数 known 0」）。
+    """
     return sum(
         1
         for record in state.submissions.values()
-        if record.user_id == user_id and period.contains(record.occurred_at)
+        if record.user_id == user_id
+        and record.course_id == course_id
+        and period.contains(record.occurred_at)
     )
 
 
@@ -87,12 +104,16 @@ def session_seconds(times: Sequence[datetime], timezone: ZoneInfo) -> int:
 
 
 def question_type_weak_points(
-    state: AnalyticsState, period: Period, user_ids: Collection[str]
+    state: AnalyticsState, period: Period, user_ids: Collection[str], course_id: str
 ) -> list[QuestionTypeWeakPoint]:
     """题型错误率：只统计已判分的提交，未判分（isCorrect 为 null）不入分母。"""
     counts: dict[str, list[int]] = {}
     for judgement in state.judgements.values():
-        if judgement.user_id not in user_ids or not period.contains(judgement.occurred_at):
+        if (
+            judgement.course_id != course_id
+            or judgement.user_id not in user_ids
+            or not period.contains(judgement.occurred_at)
+        ):
             continue
         bucket = counts.setdefault(judgement.question_type or UNKNOWN_KEY, [0, 0])
         bucket[1] += 1
@@ -115,12 +136,16 @@ def question_type_weak_points(
 
 
 def chapter_weak_points(
-    state: AnalyticsState, period: Period, user_ids: Collection[str]
+    state: AnalyticsState, period: Period, user_ids: Collection[str], course_id: str
 ) -> list[ChapterWeakPoint]:
     """章节错题：本周期无错题的章节不出现（不返回 0 行）。"""
     counts: dict[str, list[int]] = {}
     for mistake in state.mistakes.values():
-        if mistake.user_id not in user_ids or not period.contains(mistake.recorded_at):
+        if (
+            mistake.course_id != course_id
+            or mistake.user_id not in user_ids
+            or not period.contains(mistake.recorded_at)
+        ):
             continue
         bucket = counts.setdefault(mistake.chapter_id or UNKNOWN_KEY, [0, 0])
         bucket[0] += 1
@@ -148,9 +173,11 @@ def chapter_weak_points(
     )
 
 
-def weakest_chapter(state: AnalyticsState, user_id: str, period: Period) -> ChapterWeakPoint | None:
-    """该生错题最多的章节；本周期无错题返回 None（已知事实，不是未知）。"""
-    items = chapter_weak_points(state, period, {user_id})
+def weakest_chapter(
+    state: AnalyticsState, user_id: str, period: Period, course_id: str
+) -> ChapterWeakPoint | None:
+    """该生本课程内错题最多的章节；本周期无错题返回 None（已知事实，不是未知）。"""
+    items = chapter_weak_points(state, period, {user_id}, course_id)
     if not items:
         return None
     return sorted(items, key=lambda item: (-item.mistake_count, item.key))[0]

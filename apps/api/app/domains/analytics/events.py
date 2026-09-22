@@ -1,7 +1,7 @@
 """学习事件输入模型（M6 消费侧）。
 
 字段与语义依据 M5 的 `packages/contracts/learning/learning-events.md`
-（PR #26，未合并）：六公共字段 `eventId` / `eventType` / `userId` / `courseId` /
+（已合并进 main）：六公共字段 `eventId` / `eventType` / `userId` / `courseId` /
 `occurredAt` / `traceId` / `schemaVersion` 加 `payload`。
 
 本模块只做输入校验与规范化，不做聚合。校验失败抛 `EventValidationError`，
