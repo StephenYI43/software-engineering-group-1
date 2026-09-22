@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel, Field
 
 from app.core.request_id import create_request_id
+from app.domains.tutoring.router import router as tutoring_router
 
 
 class HealthResponse(BaseModel):
@@ -36,6 +37,8 @@ def create_app() -> FastAPI:
         """Report process liveness only; this does not test external dependencies."""
         response.headers["Cache-Control"] = "no-store"
         return HealthResponse(request_id=request.state.request_id)
+
+    application.include_router(tutoring_router)
 
     return application
 
