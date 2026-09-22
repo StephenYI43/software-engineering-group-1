@@ -15,6 +15,7 @@ from app.domains.analytics.state import AnalyticsState
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 STUDENTS = frozenset({"user_mock_s01", "user_mock_s02", "user_mock_s03"})
+COURSE = "course_mock_c01"
 
 
 def at(hour: int, minute: int) -> datetime:
@@ -56,23 +57,35 @@ def test_session_spanning_local_midnight_is_split_by_day() -> None:
 
 
 def test_duration_matches_contract_sample(
-    aggregated_state: AnalyticsState, last_7_days: Period
+    aggregated_state: AnalyticsState, last_7_days: Period, course_id: str
 ) -> None:
-    assert aggregation.duration_seconds(aggregated_state, "user_mock_s01", last_7_days) == 1680
-    assert aggregation.duration_seconds(aggregated_state, "user_mock_s02", last_7_days) == 1860
+    assert (
+        aggregation.duration_seconds(aggregated_state, "user_mock_s01", last_7_days, course_id)
+        == 1680
+    )
+    assert (
+        aggregation.duration_seconds(aggregated_state, "user_mock_s02", last_7_days, course_id)
+        == 1860
+    )
 
 
 def test_student_without_events_has_unknown_duration(
-    aggregated_state: AnalyticsState, last_7_days: Period
+    aggregated_state: AnalyticsState, last_7_days: Period, course_id: str
 ) -> None:
     assert (
-        aggregation.has_activity_in_period(aggregated_state, "user_mock_s03", last_7_days) is False
+        aggregation.has_activity_in_period(
+            aggregated_state, "user_mock_s03", last_7_days, course_id
+        )
+        is False
     )
-    assert aggregation.duration_seconds(aggregated_state, "user_mock_s03", last_7_days) is None
+    assert (
+        aggregation.duration_seconds(aggregated_state, "user_mock_s03", last_7_days, course_id)
+        is None
+    )
 
 
 def test_events_outside_period_do_not_count(
-    aggregated_state: AnalyticsState, request_time: datetime
+    aggregated_state: AnalyticsState, request_time: datetime, course_id: str
 ) -> None:
     from app.domains.analytics.period import PeriodQuery, resolve_period
 
@@ -81,22 +94,58 @@ def test_events_outside_period_do_not_count(
         request_time,
     )
 
-    assert aggregation.duration_seconds(aggregated_state, "user_mock_s01", past) is None
+    assert aggregation.duration_seconds(aggregated_state, "user_mock_s01", past, course_id) is None
 
 
 def test_submission_count_deduplicates_by_submission_id(
-    aggregated_state: AnalyticsState, last_7_days: Period
+    aggregated_state: AnalyticsState, last_7_days: Period, course_id: str
 ) -> None:
     """样例第 11 条与第 1 条 `submissionId` 相同，提交数不得变为 2 次以上。"""
-    assert aggregation.submission_count(aggregated_state, "user_mock_s01", last_7_days) == 2
-    assert aggregation.submission_count(aggregated_state, "user_mock_s02", last_7_days) == 1
-    assert aggregation.submission_count(aggregated_state, "user_mock_s03", last_7_days) is None
+    assert (
+        aggregation.submission_count(aggregated_state, "user_mock_s01", last_7_days, course_id) == 2
+    )
+    assert (
+        aggregation.submission_count(aggregated_state, "user_mock_s02", last_7_days, course_id) == 1
+    )
+    # 计数 known 0：无提交是已知的 0
+    assert (
+        aggregation.submission_count(aggregated_state, "user_mock_s03", last_7_days, course_id) == 0
+    )
+
+
+def test_course_filter_excludes_other_courses(
+    event_factory, build_state, last_7_days: Period
+) -> None:
+    """同一用户在两个课程各有事件：course 过滤后互不可见。"""
+    events = [
+        event_factory(
+            event_type="assignment_submitted",
+            occurred_at="2026-09-16T08:00:00Z",
+            payload={"submissionId": "submission_mock_c1", "questionType": "single_choice"},
+        ),
+        event_factory(
+            event_type="study_plan_saved",
+            occurred_at="2026-09-16T09:00:00Z",
+            payload={"planId": "plan_mock_x"},
+            course_id="course_mock_c02",
+        ),
+    ]
+    state = build_state(events)
+
+    assert aggregation.submission_count(state, "user_mock_s01", last_7_days, COURSE) == 1
+    assert aggregation.submission_count(state, "user_mock_s01", last_7_days, "course_mock_c02") == 0
+    assert aggregation.duration_seconds(state, "user_mock_s01", last_7_days, COURSE) == 60
+    assert (
+        aggregation.duration_seconds(state, "user_mock_s01", last_7_days, "course_mock_c02") == 60
+    )
 
 
 def test_question_type_weak_points_match_contract_sample(
-    aggregated_state: AnalyticsState, last_7_days: Period
+    aggregated_state: AnalyticsState, last_7_days: Period, course_id: str
 ) -> None:
-    items = aggregation.question_type_weak_points(aggregated_state, last_7_days, STUDENTS)
+    items = aggregation.question_type_weak_points(
+        aggregated_state, last_7_days, STUDENTS, course_id
+    )
 
     assert [(item.key, item.error_rate, item.sample_size) for item in items] == [
         ("single_choice", 0.5, 2),
@@ -106,7 +155,7 @@ def test_question_type_weak_points_match_contract_sample(
 
 
 def test_weak_points_put_insufficient_samples_last(
-    event_factory, build_state, last_7_days: Period
+    event_factory, build_state, last_7_days: Period, course_id: str
 ) -> None:
     """样本量 1、错误率 100% 的章节不得因错误率霸榜（教师端原型已提出该风险）。"""
     events = [
@@ -134,7 +183,9 @@ def test_weak_points_put_insufficient_samples_last(
     )
     state = build_state(events)
 
-    items = aggregation.question_type_weak_points(state, last_7_days, frozenset({"user_mock_s01"}))
+    items = aggregation.question_type_weak_points(
+        state, last_7_days, frozenset({"user_mock_s01"}), course_id
+    )
 
     assert [item.key for item in items] == ["frequent", "rare"]
     assert items[0].insufficient_sample is False
@@ -142,17 +193,17 @@ def test_weak_points_put_insufficient_samples_last(
 
 
 def test_question_type_weak_points_ignore_other_classes_and_users(
-    aggregated_state: AnalyticsState, last_7_days: Period
+    aggregated_state: AnalyticsState, last_7_days: Period, course_id: str
 ) -> None:
     items = aggregation.question_type_weak_points(
-        aggregated_state, last_7_days, frozenset({"user_mock_s03"})
+        aggregated_state, last_7_days, frozenset({"user_mock_s03"}), course_id
     )
 
     assert items == []
 
 
 def test_unjudged_submission_is_excluded_from_error_rate(
-    event_factory, build_state, last_7_days: Period
+    event_factory, build_state, last_7_days: Period, course_id: str
 ) -> None:
     """主观题未判分不代表答错，不能进分母。"""
     events = [
@@ -169,14 +220,16 @@ def test_unjudged_submission_is_excluded_from_error_rate(
     state = build_state(events)
 
     assert (
-        aggregation.question_type_weak_points(state, last_7_days, frozenset({"user_mock_s01"}))
+        aggregation.question_type_weak_points(
+            state, last_7_days, frozenset({"user_mock_s01"}), course_id
+        )
         == []
     )
-    assert aggregation.submission_count(state, "user_mock_s01", last_7_days) == 1
+    assert aggregation.submission_count(state, "user_mock_s01", last_7_days, course_id) == 1
 
 
 def test_missing_question_type_is_grouped_under_unknown(
-    event_factory, build_state, last_7_days: Period
+    event_factory, build_state, last_7_days: Period, course_id: str
 ) -> None:
     events = [
         event_factory(
@@ -187,15 +240,17 @@ def test_missing_question_type_is_grouped_under_unknown(
     ]
     state = build_state(events)
 
-    items = aggregation.question_type_weak_points(state, last_7_days, frozenset({"user_mock_s01"}))
+    items = aggregation.question_type_weak_points(
+        state, last_7_days, frozenset({"user_mock_s01"}), course_id
+    )
 
     assert [item.key for item in items] == [aggregation.UNKNOWN_KEY]
 
 
 def test_chapter_weak_points_match_contract_sample(
-    aggregated_state: AnalyticsState, last_7_days: Period
+    aggregated_state: AnalyticsState, last_7_days: Period, course_id: str
 ) -> None:
-    items = aggregation.chapter_weak_points(aggregated_state, last_7_days, STUDENTS)
+    items = aggregation.chapter_weak_points(aggregated_state, last_7_days, STUDENTS, course_id)
 
     assert len(items) == 1
     assert (items[0].key, items[0].mistake_count, items[0].resolved_count) == (
@@ -206,14 +261,20 @@ def test_chapter_weak_points_match_contract_sample(
 
 
 def test_weakest_chapter_is_none_without_mistakes(
-    aggregated_state: AnalyticsState, last_7_days: Period
+    aggregated_state: AnalyticsState, last_7_days: Period, course_id: str
 ) -> None:
-    assert aggregation.weakest_chapter(aggregated_state, "user_mock_s01", last_7_days) is not None
-    assert aggregation.weakest_chapter(aggregated_state, "user_mock_s02", last_7_days) is None
+    assert (
+        aggregation.weakest_chapter(aggregated_state, "user_mock_s01", last_7_days, course_id)
+        is not None
+    )
+    assert (
+        aggregation.weakest_chapter(aggregated_state, "user_mock_s02", last_7_days, course_id)
+        is None
+    )
 
 
 def test_weakest_chapter_prefers_more_mistakes(
-    event_factory, build_state, last_7_days: Period
+    event_factory, build_state, last_7_days: Period, course_id: str
 ) -> None:
     events = [
         event_factory(
@@ -232,7 +293,7 @@ def test_weakest_chapter_prefers_more_mistakes(
     )
     state = build_state(events)
 
-    weakest = aggregation.weakest_chapter(state, "user_mock_s01", last_7_days)
+    weakest = aggregation.weakest_chapter(state, "user_mock_s01", last_7_days, course_id)
 
     assert weakest is not None
     assert weakest.key == "chapter_mock_heavy"

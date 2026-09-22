@@ -23,6 +23,7 @@ UtcIso = Annotated[datetime, PlainSerializer(_utc_iso, return_type=str)]
 
 UnknownReason = Literal["no_events_in_period", "duration_source_unavailable"]
 NO_EVENTS_IN_PERIOD: UnknownReason = "no_events_in_period"
+DURATION_SOURCE_UNAVAILABLE: UnknownReason = "duration_source_unavailable"
 
 
 class _CamelModel(BaseModel):
@@ -108,13 +109,45 @@ class StudentOverview(_CamelModel):
     weakest_chapter: ChapterWeakPointResponse | None
 
 
+class StudentPage(_CamelModel):
+    """`students` 列表的分页包装。"""
+
+    page: int
+    """页码，从 1 起；超出总页数时 `items` 为空。"""
+
+    page_size: int
+    """每页人数（1—200）。"""
+
+    total: int
+    """学生总行数（不受分页影响）。"""
+
+    items: list[StudentOverview]
+
+
+class Consumption(_CamelModel):
+    """本域相对上游事件源的消费水位。"""
+
+    data_state: Literal["complete", "partial", "unknown"]
+    """`complete`：周期内可消费的事件已全部纳入；`partial`：游标落后于上游；
+    `unknown`：上游不可得（未接入或水位读取失败）。"""
+
+    upstream_watermark: UtcIso | None
+    """上游已写入的最新事件位置；null 表示上游无事件或水位不可得。"""
+
+
 class ClassOverview(_CamelModel):
     """`GET /api/v1/analytics/classes/{classId}/overview` 的响应。"""
 
     class_id: str
+    course_id: str | None
+    """班级关联的课程 ID（来自 M5 `classes.course_id`）；映射缺失时为 null。"""
+
     period: PeriodResponse
     data_through: UtcIso | None
+    """本响应纳入的最新事件发生时间（限定查询周期），不是消费位点。"""
+
     generated_at: UtcIso
+    consumption: Consumption
     summary: Summary
     weak_points: WeakPoints
-    students: list[StudentOverview]
+    students: StudentPage

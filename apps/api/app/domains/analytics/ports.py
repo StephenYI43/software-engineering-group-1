@@ -35,6 +35,13 @@ class EventSource(Protocol):
         """读取 `cursor` 之后最多 `limit` 条事件，升序。`cursor` 为 None 表示从头读。"""
         ...
 
+    def watermark(self) -> Cursor | None:
+        """上游已写入的最新事件位置（按 `(occurredAt, eventId)`）。
+
+        用于计算响应的 `consumption` 水位：上游无事件或水位暂不可得时返回 None。
+        """
+        ...
+
 
 class AnalyticsStore(Protocol):
     """聚合状态与游标的持久化。
@@ -61,4 +68,19 @@ class ClassRoster(Protocol):
 
     def list_students(self, class_id: str) -> Sequence[StudentRef] | None:
         """列出班级学生；无权限或不存在时返回 None。"""
+        ...
+
+
+class ClassCourseMapper(Protocol):
+    """班级 → 课程 ID 的映射。
+
+    映射来源于 M5 课程域的 `classes.course_id`，经 M5 公开的 service 函数查询；
+    M1 只在 API 入口做身份鉴权，不提供该映射，真实实现待 M5 域落地后替换。
+
+    返回 `None` 表示映射缺失或未知：该班级没有可归属的事件，统计视为空
+    （计数为已知 0、时长 unknown、weakPoints 空），coverage 仍按花名册真实报告。
+    """
+
+    def course_id_for(self, class_id: str) -> str | None:
+        """返回班级关联的课程 ID；映射缺失/未知时返回 None。"""
         ...

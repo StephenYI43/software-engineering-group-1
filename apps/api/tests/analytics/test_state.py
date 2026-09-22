@@ -37,6 +37,7 @@ def test_repeated_submission_event_is_counted_once(event_factory, build_state) -
     assert (
         state.submissions["submission_mock_a01"].occurred_at.hour == 8
     )  # 首次到达的时间决定周期归属
+    assert state.submissions["submission_mock_a01"].course_id == "course_mock_c01"
 
 
 def test_later_judgement_wins(event_factory, build_state) -> None:
@@ -185,7 +186,8 @@ def test_activity_records_every_event_type(event_factory, build_state) -> None:
         ]
     )
 
-    assert len(state.activity["user_mock_s01"]) == 2
+    # activity 按 userId → courseId 二级分组，跨班查询按课程取数
+    assert len(state.activity["user_mock_s01"]["course_mock_c01"]) == 2
     assert state.submissions == {}
     assert state.judgements == {}
 
@@ -248,6 +250,8 @@ def test_clone_is_independent(event_factory, build_state) -> None:
     )
 
     cloned = state.clone()
-    cloned.activity["user_mock_s01"].append(datetime(2026, 9, 16, 10, 0, tzinfo=UTC))
+    cloned.activity["user_mock_s01"]["course_mock_c01"].append(
+        datetime(2026, 9, 16, 10, 0, tzinfo=UTC)
+    )
 
-    assert len(state.activity["user_mock_s01"]) == 1
+    assert len(state.activity["user_mock_s01"]["course_mock_c01"]) == 1

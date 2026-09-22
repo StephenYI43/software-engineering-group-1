@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -16,9 +17,21 @@ from app.domains.analytics.ports import StudentRef
 from app.domains.analytics.service import AnalyticsConsumer
 from app.domains.analytics.state import AnalyticsState
 
+COURSE = "course_mock_c01"
+
 
 class StaleSource:
     """故意返回早于游标的事件，用于验证游标只前进。"""
+
+    def __init__(self, events: Sequence[LearningEvent]) -> None:
+        self._events = list(events)
+
+    def read_after(self, cursor: Cursor | None, limit: int) -> Sequence[LearningEvent]:
+        return self._events[:limit]
+
+
+class UnorderedSource:
+    """故意返回乱序批次，模拟真实 DB 的 ORDER BY 写错。"""
 
     def __init__(self, events: Sequence[LearningEvent]) -> None:
         self._events = list(events)
@@ -76,11 +89,11 @@ def test_replay_after_cursor_reset_does_not_double_count(synthetic_events, last_
     """游标回拨后重放：`eventId` 账本兜底，统计不变（消费契约走查第 4 步）。"""
     consumer, store = make_consumer(synthetic_events)
     consumer.poll_once()
-    before = aggregation.submission_count(store.load(), "user_mock_s01", last_7_days)
+    before = aggregation.submission_count(store.load(), "user_mock_s01", last_7_days, COURSE)
 
     store.load().cursor = None  # 模拟游标回拨 / 回填重放
     result = consumer.poll_once()
-    after = aggregation.submission_count(store.load(), "user_mock_s01", last_7_days)
+    after = aggregation.submission_count(store.load(), "user_mock_s01", last_7_days, COURSE)
 
     assert (result.applied_count, result.skipped_count) == (0, 11)
     assert before == after == 2
@@ -164,3 +177,58 @@ def test_static_roster_hides_unauthorized_classes() -> None:
 
     assert roster.list_students("class_mock_c01") is not None
     assert roster.list_students("class_mock_other") is None
+
+
+def test_out_of_order_batch_fails_fast(event_factory) -> None:
+    """批次内事件必须按 (occurredAt, eventId) 升序：乱序时 fail fast 且不提交游标。"""
+    early = event_factory(
+        event_type="study_plan_saved",
+        occurred_at="2026-09-16T08:00:00Z",
+        payload={"planId": "plan_mock_a", "itemsCount": 1},
+    )
+    late = event_factory(
+        event_type="study_plan_saved",
+        occurred_at="2026-09-16T09:00:00Z",
+        payload={"planId": "plan_mock_b", "itemsCount": 1},
+    )
+    store = InMemoryAnalyticsStore()
+    consumer = AnalyticsConsumer(UnorderedSource([late, early]), store)
+
+    with pytest.raises(EventValidationError):
+        consumer.poll_once()
+
+    assert store.load().cursor is None
+    assert store.load().processed_event_ids == set()
+
+
+def test_poll_warns_about_events_without_course_id(caplog, event_factory) -> None:
+    """批次里有 courseId 为 None 的事件时告警；日志不携带 payload 与用户标识。"""
+    event = event_factory(
+        event_type="study_plan_saved",
+        occurred_at="2026-09-16T08:00:00Z",
+        payload={"planId": "plan_mock_z", "itemsCount": 1},
+        course_id=None,
+    )
+    consumer, _ = make_consumer([event])
+
+    with caplog.at_level(logging.WARNING, logger="app.domains.analytics.service"):
+        consumer.poll_once()
+
+    assert any("courseId" in record.getMessage() for record in caplog.records)
+    assert all("user_mock" not in record.getMessage() for record in caplog.records)
+    assert all("planId" not in record.getMessage() for record in caplog.records)
+
+
+def test_poll_logs_read_apply_skip_and_cursor(caplog, synthetic_events) -> None:
+    """每轮消费结束输出结构化摘要日志，游标只带 occurred_at。"""
+    consumer, _ = make_consumer(synthetic_events)
+
+    with caplog.at_level(logging.INFO, logger="app.domains.analytics.service"):
+        consumer.poll_once()
+
+    summary = next(record.getMessage() for record in caplog.records if "read=" in record.message)
+    assert "read=11" in summary
+    assert "applied=11" in summary
+    assert "skipped=0" in summary
+    assert "2026-09-16T09:20:00+00:00" in summary
+    assert "event_" not in summary  # 不泄露事件标识
