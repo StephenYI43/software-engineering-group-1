@@ -16,3 +16,6 @@ uploads/
 .coverage.*
 .mypy_cache/
 htmlcov/
+
+# macOS Finder metadata (never commit these)
+.DS_Store
