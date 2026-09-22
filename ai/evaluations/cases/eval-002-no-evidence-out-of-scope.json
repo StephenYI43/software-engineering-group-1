@@ -1,0 +1,23 @@
+{
+  "caseId": "eval-002",
+  "category": "no-evidence",
+  "kind": "graded",
+  "title": "课程外问题：如实说明无依据，不编造引用",
+  "stage": "thought",
+  "sourceDocuments": [
+    {
+      "documentId": "doc_9a2f4c",
+      "documentTitle": "合成讲义-第1章-函数与极限.pdf"
+    }
+  ],
+  "studentTurns": ["老师，矩阵的特征值在高数里怎么求？"],
+  "retrievedPassages": [],
+  "expectations": {
+    "mustInclude": ["没有", "课程"],
+    "mustNotInclude": ["特征多项式", "det(A - λI)", "第 3 章"],
+    "citations": { "required": false, "allowedIds": [], "forbiddenIds": [] },
+    "hasEvidence": false,
+    "maxFollowUps": 3
+  },
+  "notes": "考察 docs/requirements.md:26「找不到依据时明确说明，不编造引用」与 tutoring-response.md:119 的不变量「hasEvidence=false ⟺ citations 为空数组」。mustNotInclude 断言的是「不得给出课程外的具体解法，也不得编造页码」——线性代数的内容不在这门课的授权材料里。检索结果为空是本用例的输入，等价于 mock.py:100-103 走 no_evidence 脚本的触发条件。"
+}
