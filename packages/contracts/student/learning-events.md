@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | `courseId` | string | 否 | 当前课程 ID；服务端必须校验访问权 |
 | `chapterId` | string | 否 | 当前章节 ID；服务端必须校验其属于 `courseId` |
-| `idempotencyKey` | string | 否 | 一次真实浏览动作的稳定重试键；网络重试必须复用 |
+| `idempotencyKey` | string | 否 | 一次真实浏览动作的稳定重试键，非空且不超过 128 字符；网络重试必须复用 |
 
 服务端完成鉴权和资源归属校验后，才把意图转换为规范事件并追加到
 `learning_events`。职责边界如下：
@@ -20,12 +20,30 @@
 - `userId` 来自服务端认证上下文，客户端不能传入或覆盖；
 - `eventId`、`occurredAt`、`traceId`、`schemaVersion` 由服务端生成；
 - `courseId` / `chapterId` 必须通过课程访问权和父子归属校验；越权资源按平台统一策略返回 404；
-- 同一 `(userId, idempotencyKey)` 只生成一个规范事件，重试返回原结果；
+- 同一 `(userId, idempotencyKey)` 且 `courseId` / `chapterId` 相同时，只生成一个规范事件，
+  重试返回首次结果；
+- 同一 `(userId, idempotencyKey)` 携带不同 `courseId` 或 `chapterId` 时，返回 409
+  `IDEMPOTENCY_KEY_REUSED`，且不得生成新事件；
 - 前端不得调用通用“自选 `eventType`”入口，避免伪造其他领域事件。
 
 S1 不支持离线积压后跨会话补传。上报失败不阻塞章节阅读；页面可做有上限的网络重试，
 但必须复用同一 `idempotencyKey`。具体 HTTP 路径由 M1 / M5 在实现任务中冻结，本契约不越权指定
 API 路由或数据库归属。
+
+### idempotencyKey 生命周期
+
+`idempotencyKey` 是不透明字符串，建议使用 UUIDv4 或同等强度随机值；客户端和服务端均不得解析
+其中内容判断课程、章节或权限。一次章节浏览动作的键管理规则如下：
+
+| 阶段 | 键状态 | 行为 |
+| --- | --- | --- |
+| 章节正文首次可见 | 生成一次新键 | 当前浏览动作内固定使用该键 |
+| 首次结果尚未确认 | 复用同一键 | 网络超时或失败后的有界重试不得生成新键 |
+| 服务端确认成功 | 固定关联首次结果 | 客户端结束当前动作；后续重试仍可取得首次结果，但不得用于另一章节 |
+| 刷新、离开后重新进入章节 | 生成新键 | 视为新的浏览动作，可产生新的 `chapter_viewed` |
+
+错误响应沿用平台统一结构 `{code, message, requestId, details}`。`IDEMPOTENCY_KEY_REUSED`
+只表示同一键被用于不同请求参数；资源不存在或无权访问仍返回 404，不能用该错误泄露资源信息。
 
 ## 规范事件公共字段
 
