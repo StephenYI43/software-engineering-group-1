@@ -1,0 +1,9 @@
+{
+  "code": "VALIDATION_FAILED",
+  "message": "统计周期参数不合法",
+  "requestId": "req_mock_9002",
+  "details": {
+    "period": "custom 时 from 与 to 均为必填",
+    "from": "必须早于 to"
+  }
+}
