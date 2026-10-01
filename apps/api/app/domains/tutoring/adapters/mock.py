@@ -10,13 +10,20 @@ Scenario coverage in this first slice is `normal` and `no_evidence`. The ADR als
 requires `refused`, `timeout`, `invalid_output`, `thinking_only` and
 `slow_cancellable`; those need the adapter's error types and follow in a later
 slice, so they are absent rather than faked here.
+
+`envelope=True` appends the trailing response envelope that the S1 output format
+asks the model for. It is **off by default** so that everything above keeps
+reproducing the frozen samples byte for byte; the SSE service turns it on.
 """
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Sequence
+from typing import Final
 
 from app.domains.tutoring.adapters.base import ModelRequest
 from app.domains.tutoring.adapters.chunks import Finished, ModelChunk, TextDelta, Usage
+from app.domains.tutoring.envelope import RESPONSE_CLOSE, RESPONSE_OPEN
 
 __all__ = ["SCENARIOS", "MockModelClient"]
 
@@ -47,6 +54,35 @@ _SCRIPTS: dict[str, tuple[str, ...]] = {
 
 SCENARIOS: frozenset[str] = frozenset(_SCRIPTS)
 
+#: The envelope each scenario answers with, mirroring the frozen samples:
+#: `normal` reproduces `01-thought-with-citation.json`, `no_evidence` reproduces
+#: `03-no-evidence.json`. `citations` here is the label the model claims to have
+#: used; whether it survives depends on the server's allow-list.
+_ENVELOPES: dict[str, dict[str, object]] = {
+    "normal": {
+        "citations": ["c1"],
+        "followUps": ["那 ε 和 δ 哪个是先给定的？", "如果只从右侧趋近，结论还成立吗？"],
+        "emotion": "encouraging",
+        "action": "nod",
+    },
+    "no_evidence": {
+        "citations": [],
+        "followUps": ["那这门课里和它最接近的知识点是什么？", "帮我看看本课程大纲里有哪些相关章节"],
+        "emotion": "neutral",
+        "action": "idle",
+    },
+}
+
+#: The template tells the model to put the envelope on its own line ("正文结束后，
+#: 另起一行"), so the prose really does end with a newline. That newline reaches
+#: `completed.response.content`, because the contract requires `content` to equal
+#: the concatenated deltas character for character
+#: (`packages/contracts/tutoring/samples/05-sse-stream.txt:26-27`) and the newline
+#: is sent as a delta before the marker is even recognised. Frozen sample `01`
+#: predates the envelope convention and has no trailing newline, so the two differ
+#: by exactly this character; see the PR notes. Change this constant to drop it.
+_ENVELOPE_SEPARATOR: Final[str] = "\n"
+
 
 def _placeholder_token_count(texts: Sequence[str]) -> int:
     """A deterministic stand-in, not a tokenizer: two characters per token.
@@ -64,26 +100,37 @@ class MockModelClient:
     With `scenario=None` the script follows the request's shape: an empty
     `retrieved_chunks` means there is nothing to cite, so the no-evidence script
     runs. `latency_seconds` is injectable so cancellation stays testable; CI
-    keeps it at `0`.
+    keeps it at `0`. `envelope` appends the S1 response envelope as one more
+    chunk, leaving the script itself untouched.
     """
 
-    def __init__(self, *, scenario: str | None = None, latency_seconds: float = 0.0) -> None:
+    def __init__(
+        self,
+        *,
+        scenario: str | None = None,
+        latency_seconds: float = 0.0,
+        envelope: bool = False,
+    ) -> None:
         if scenario is not None and scenario not in SCENARIOS:
             raise ValueError(f"unknown scenario: {scenario!r}; expected one of {sorted(SCENARIOS)}")
         if latency_seconds < 0:
             raise ValueError("latency_seconds must not be negative")
         self._scenario = scenario
         self._latency_seconds = latency_seconds
+        self._envelope = envelope
         self._closed = False
 
     async def generate(self, request: ModelRequest) -> AsyncIterator[ModelChunk]:
         if self._closed:
             raise RuntimeError("model client is closed")
-        script = _SCRIPTS[self._select_scenario(request)]
+        scenario = self._select_scenario(request)
+        script = _SCRIPTS[scenario]
         for piece in script:
             if self._latency_seconds:
                 await asyncio.sleep(self._latency_seconds)
             yield TextDelta(text=piece)
+        if self._envelope:
+            yield TextDelta(text=_envelope_text(scenario, request))
         yield Usage(
             input_tokens=_placeholder_token_count(
                 [request.system_prompt, *(turn.content for turn in request.turns)]
@@ -101,3 +148,19 @@ class MockModelClient:
         if self._scenario is not None:
             return self._scenario
         return "normal" if request.retrieved_chunks else "no_evidence"
+
+
+def _envelope_text(scenario: str, request: ModelRequest) -> str:
+    """The trailing envelope, laid out the way the template asks for it.
+
+    `citations` is decided by the request rather than copied from the sample:
+    labels are handed out by the server's allow-list step, so with no retrieved
+    chunks no label exists. Claiming one anyway would make the mock invent a
+    citation the server then has to drop, which would hide that rule from the tests.
+    """
+
+    fields: dict[str, object] = dict(_ENVELOPES[scenario])
+    if not request.retrieved_chunks:
+        fields["citations"] = []
+    payload = json.dumps(fields, ensure_ascii=False, separators=(",", ":"))
+    return f"{_ENVELOPE_SEPARATOR}{RESPONSE_OPEN}{payload}{RESPONSE_CLOSE}"
