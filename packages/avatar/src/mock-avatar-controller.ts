@@ -35,10 +35,16 @@ export interface MockAvatarOptions {
   /** 失败注入：返回非 null 时，本次播报在 started 后以 avatar_playback_error 终止。默认永不失败。 */
   shouldFail?: (input: SpeakInput) => MockFailureSpec | null
   /**
-   * error.requestId 的生成器。默认生成 `req_` + 随机 hex 的**本地追踪 ID**：
-   * 仅供前端日志关联，不代表服务端请求；ID 形态待 M1 统一约定（契约「utteranceId 与 requestId」）。
+   * error.requestId 的生成器。默认生成 `req_` + UUIDv4.hex（32 位小写 hex），
+   * 与平台约定（`apps/api/app/core/request_id.py`）格式一致；但它是**本地追踪 ID**，
+   * 仅供前端日志关联，不代表服务端请求（契约「utteranceId 与 requestId」）。
    */
   requestIdFactory?: () => string
+  /**
+   * 订阅者异常处理器：任一 listener 抛错时调用，参数为异常与当时分发的事件。
+   * 默认经 `console.error` 保留诊断（不静默吞掉，也不让异常进入控制器）。
+   */
+  onListenerError?: (error: unknown, event: AvatarPlaybackEvent) => void
 }
 
 /** 最近一次被接受的播报（含已终止）：供文字区在播报结束后保留展示（文字降级路径）。 */
@@ -77,9 +83,13 @@ const DEFAULT_FAILURE_CODE = 'AVATAR_PLAYBACK_FAILED'
 const DEFAULT_FAILURE_MESSAGE = '播放失败，文字回答已保留'
 
 const defaultRequestIdFactory = (): string => {
-  const bytes = new Uint8Array(6)
-  crypto.getRandomValues(bytes)
-  return 'req_' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  // 平台约定（apps/api/app/core/request_id.py）：req_ + UUIDv4.hex（32 位小写 hex）。
+  // crypto.randomUUID() 在 Node 24 与浏览器/jsdom 均可用；去掉连字符即 UUIDv4.hex。
+  return `req_${crypto.randomUUID().replaceAll('-', '')}`
+}
+
+const defaultOnListenerError = (error: unknown, event: AvatarPlaybackEvent): void => {
+  console.error(`[avatar] 事件 ${event.type} 的订阅者抛异常`, error)
 }
 
 /**
@@ -93,6 +103,7 @@ export function createMockAvatarController(options: MockAvatarOptions = {}): Moc
   const timing = options.timing ?? defaultPlaybackTiming
   const shouldFail = options.shouldFail ?? (() => null)
   const requestIdFactory = options.requestIdFactory ?? defaultRequestIdFactory
+  const onListenerError = options.onListenerError ?? defaultOnListenerError
 
   let state: PlaybackState = { status: 'idle' }
   /** 已终止的 utteranceId：重复使用该 ID 属于调用方缺陷，speak 同步抛错。 */
@@ -101,9 +112,24 @@ export function createMockAvatarController(options: MockAvatarOptions = {}): Moc
   let lastUtterance: LastUtterance | null = null
   let lastError: AvatarError | null = null
 
+  const reportListenerError = (error: unknown, event: AvatarPlaybackEvent): void => {
+    try {
+      onListenerError(error, event)
+    } catch (handlerError) {
+      // 错误处理器自身抛错也不能破坏控制器；退回 console 保留最低诊断。
+      console.error('[avatar] onListenerError 处理器自身抛错', handlerError)
+    }
+  }
+
   const emit = (event: AvatarPlaybackEvent): void => {
+    // 订阅者异常隔离：单个 listener 抛错不得破坏控制器状态、不得阻止其他
+    // listener 收到事件（否则 emit(started) 中途失败会让播报卡在 speaking）。
     for (const listener of listeners) {
-      listener(event)
+      try {
+        listener(event)
+      } catch (error) {
+        reportListenerError(error, event)
+      }
     }
   }
 

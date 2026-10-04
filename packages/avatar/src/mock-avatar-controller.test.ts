@@ -168,7 +168,7 @@ describe('播放失败与文字降级', () => {
     expect(errorEvent.utteranceId).toBe('utt_test_0001')
     expect(errorEvent.error.code).toBe('AVATAR_PLAYBACK_FAILED')
     expect(errorEvent.error.message).toBe('播放失败，文字回答已保留')
-    expect(errorEvent.error.requestId).toMatch(/^req_[0-9a-f]{12}$/)
+    expect(errorEvent.error.requestId).toMatch(/^req_[0-9a-f]{32}$/)
     expect(errorEvent.error.details).toEqual({})
     expect(controller.getStatus()).toBe('error')
   })
@@ -293,6 +293,131 @@ describe('结构性入参校验', () => {
       { type: 'avatar_playback_started', utteranceId: 'utt_test_0001' },
       { type: 'avatar_playback_completed', utteranceId: 'utt_test_0001' },
     ])
+  })
+})
+
+describe('requestId 格式', () => {
+  it('默认 requestIdFactory 生成 req_ + 32 位小写 hex（UUIDv4.hex），且两次生成不相同', () => {
+    const controller = createMockAvatarController({
+      shouldFail: () => ({}),
+      timing: () => 1000,
+    })
+    const events = createEventLog(controller)
+
+    controller.speak(makeInput({ utteranceId: 'utt_rid_1' }))
+    controller.speak(makeInput({ utteranceId: 'utt_rid_2' }))
+
+    const requestIds = events
+      .filter((e) => e.type === 'avatar_playback_error')
+      .map((e) => (e.type === 'avatar_playback_error' ? e.error.requestId : ''))
+    expect(requestIds).toHaveLength(2)
+    for (const requestId of requestIds) {
+      expect(requestId.startsWith('req_')).toBe(true)
+      expect(requestId).toHaveLength(4 + 32)
+      expect(requestId).toMatch(/^req_[0-9a-f]{32}$/)
+    }
+    expect(requestIds[0]).not.toBe(requestIds[1])
+  })
+})
+
+describe('订阅者异常隔离', () => {
+  it('一个 listener 抛错时，其他 listener 仍收到事件，播报仍进入 completed', () => {
+    const listenerErrors: Array<{ error: unknown; event: AvatarPlaybackEvent }> = []
+    const controller = createMockAvatarController({
+      timing: () => 1000,
+      onListenerError: (error, event) => {
+        listenerErrors.push({ error, event })
+      },
+    })
+    controller.subscribe(() => {
+      throw new Error('listener A 故障')
+    })
+    const received = createEventLog(controller)
+
+    controller.speak(makeInput())
+    vi.advanceTimersByTime(1000)
+
+    expect(received).toEqual([
+      { type: 'avatar_playback_started', utteranceId: 'utt_test_0001' },
+      { type: 'avatar_playback_completed', utteranceId: 'utt_test_0001' },
+    ])
+    expect(listenerErrors).toHaveLength(2)
+    expect(listenerErrors[0]?.error).toBeInstanceOf(Error)
+    expect(listenerErrors[0]?.event.type).toBe('avatar_playback_started')
+    expect(listenerErrors[1]?.event.type).toBe('avatar_playback_completed')
+    expect(controller.getStatus()).toBe('idle')
+  })
+
+  it('播放失败路径：listener 抛错时其他 listener 仍收到 started 与 error，状态进入 error', () => {
+    const listenerErrors: AvatarPlaybackEvent[] = []
+    const controller = createMockAvatarController({
+      shouldFail: () => ({}),
+      onListenerError: (_error, event) => {
+        listenerErrors.push(event)
+      },
+    })
+    controller.subscribe(() => {
+      throw new Error('listener A 故障')
+    })
+    const received = createEventLog(controller)
+
+    controller.speak(makeInput())
+
+    expect(received.map((e) => e.type)).toEqual([
+      'avatar_playback_started',
+      'avatar_playback_error',
+    ])
+    expect(listenerErrors.map((e) => e.type)).toEqual([
+      'avatar_playback_started',
+      'avatar_playback_error',
+    ])
+    expect(controller.getStatus()).toBe('error')
+  })
+
+  it('错误处理器自身抛错时，控制器状态与其余 listener 仍不受影响', () => {
+    const controller = createMockAvatarController({
+      timing: () => 1000,
+      onListenerError: () => {
+        throw new Error('handler 故障')
+      },
+    })
+    controller.subscribe(() => {
+      throw new Error('listener A 故障')
+    })
+    const received = createEventLog(controller)
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      controller.speak(makeInput())
+      vi.advanceTimersByTime(1000)
+
+      expect(received.map((e) => e.type)).toEqual([
+        'avatar_playback_started',
+        'avatar_playback_completed',
+      ])
+      expect(controller.getStatus()).toBe('idle')
+      // handler 抛错仍保留最低诊断，不静默
+      expect(consoleSpy).toHaveBeenCalled()
+    } finally {
+      consoleSpy.mockRestore()
+    }
+  })
+
+  it('默认错误处理器经 console.error 保留诊断，不静默吞掉异常', () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const controller = createMockAvatarController({ timing: () => 1000 })
+    controller.subscribe(() => {
+      throw new Error('listener 故障')
+    })
+    const received = createEventLog(controller)
+
+    try {
+      controller.speak(makeInput())
+      expect(consoleSpy).toHaveBeenCalled()
+      expect(received).toHaveLength(1)
+    } finally {
+      consoleSpy.mockRestore()
+    }
   })
 })
 
