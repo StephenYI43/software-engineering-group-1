@@ -15,8 +15,8 @@
 
 - 自行实现 SSE 帧解析：按空行切帧、解析 `event:` / `data:` 行、处理跨 chunk 的半截帧；
 - 自行校验 `seq` 单调递增，跳号或重复视为协议错误；
-- **不使用 `AbortController` 实现「停止」按钮** —— 原因见「停止行为」中
-  `client_stop` 与 `client_disconnect` 的区分。
+- **不使用 `AbortController` 实现「停止」按钮** —— 原因见「停止行为」：
+  服务端在内部区分 `client_stop` 与 `client_disconnect`，但断连不作为事件下发。
 
 ## 事件序列
 
@@ -95,7 +95,7 @@ started  →  delta × N  →  completed        （正常完成）
 }
 ```
 
-`reason` 取值：`client_stop`（前端调用停止）| `client_disconnect`（连接断开）。
+`reason` 取值：`client_stop`（前端调用停止）。`client_disconnect` 只记录在服务端内部状态与日志中，**不作为事件下发**——连接已断，没有接收方。
 
 **`stopped` 与 `completed` 必须区分，这是硬要求。**
 `docs/code-standards.md:95`：「未经服务端确认完成的半截回答不当作完成记录」。
@@ -155,7 +155,7 @@ started  →  delta × N  →  completed        （正常完成）
 
 `POST /api/v1/tutoring/sessions/{sessionId}/turns/{turnId}/stop`
 
-- 幂等：对同一轮重复调用返回相同结果，不会产生第二个终止事件
+- 对已知轮次（active / 已停止 / 已完成等）统一返回 **204 No Content**，无响应体；未知轮次返回 **404 `TUTORING_TURN_NOT_FOUND`**；客户端只看 2xx、以 SSE 终止事件为权威，服务端不公开内部状态枚举。幂等：重复调用返回相同结果，不会产生第二个终止事件
 - 停止后服务端关闭上游模型流（不继续计费）
 - 已发出的事件保留有效，前端据 `stopped` 收尾
 - **服务端在发起上游取消后立即下发 `stopped`，不等供应商确认关闭。**
@@ -170,9 +170,9 @@ started  →  delta × N  →  completed        （正常完成）
 
 ### 为什么停止不能靠 `AbortController` 实现
 
-`reason` 的取值 `client_stop` 与 `client_disconnect` 区分的是**用户意图**与**连接断开**。
+服务端在内部区分 `client_stop` 与 `client_disconnect`：前者是**用户意图**，后者是**连接断开**；后者不会作为 `reason` 下发。
 前端若用 `AbortController.abort()` 实现停止按钮，服务端观察到的是连接断开，
-会被记为 `client_disconnect`，而不是用户意图的 `client_stop`，语义丢失。
+会被记为内部状态 `disconnected`（不产生事件），而不是用户意图的 `client_stop`，语义丢失。
 
 因此停止必须走本接口；`abort()` 只作为兜底超时后的最后手段。
 
@@ -180,7 +180,7 @@ started  →  delta × N  →  completed        （正常完成）
 
 客户端断开连接（关闭页面、网络中断）时：
 
-- 服务端将该轮记为 `aborted`，`isComplete = false`
+- 服务端将该轮记为 `disconnected`（内部状态），`isComplete = false`；**不产生 `stopped` 事件**——连接已断，没有接收方
 - 阶段不推进
 - **不重试**、不自动续传
 

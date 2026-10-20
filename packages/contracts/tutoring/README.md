@@ -76,6 +76,21 @@ M2 通读全部文件与样例后给出「三处确认 + 四处补充」。本�
 `05-sse-stream.txt` 变体三保留 `isMock: false`，因为它是前端实现「不显示 Mock 标识」
 那条渲染路径的唯一样例。
 
+### 2026-10-20：落实 M1 合并前裁定
+
+M1 对 PR #62 给出「请求更改」，裁定如下，本次修订已落进契约与样例：
+
+| 裁定 | 落点 |
+| --- | --- |
+| stop 对已知轮次统一 **204 No Content**，未知轮次 **404 `TUTORING_TURN_NOT_FOUND`**；客户端只看 2xx、以 SSE 终止事件为权威 | [sse-events.md](sse-events.md)、[tutoring-response.md](tutoring-response.md) |
+| 保留正文尾换行，`content` 必须与全部 `delta.textDelta` 的拼接逐字节相等 | [tutoring-response.md](tutoring-response.md)、[05-sse-stream.txt](05-sse-stream.txt)、样例 `01` / `03` |
+| `client_disconnect` 只记录服务端内部状态与日志，**不作为事件下发** | [sse-events.md](sse-events.md) |
+| 成功终帧推进阶段；stop、断连、模型/解析错误不推进；`summary` 封顶 | 既有实现与测试，无契约文字变更 |
+| `followUps` 超限报 `MODEL_OUTPUT_INVALID`；白名单外 citation 丢弃 | [tutoring-response.md](tutoring-response.md)、[sse-events.md](sse-events.md) |
+
+**本次修订是公共接口变更，须由 @Saber-www（M2）、@haoxuanluo351-lgtm（M4）、
+@Jiege123-CMYK（M5）复核，之后由 @StephenYI43（M1）终审。**
+
 ## 变更流程
 
 本契约是**公共接口**。按 `CONTRIBUTING.md:37`，公共接口变更需要至少 2 名评审人，
