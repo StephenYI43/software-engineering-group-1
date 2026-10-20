@@ -1,10 +1,14 @@
 /**
- * 字典检查器的反例测试（#70 A 批）。
+ * 数据字典检查器的反例测试（#70 A 批）。
  *
- * 全部用临时目录里的合成文档，不读仓库真实字典：
- * 真实字典会随各 owner 提交而变，测试跟着变就失去意义。
- * 每个用例断言「检查器会因为具体缺项而失败」，而不只是「退出码非 0」——
- * 只断言非 0 的话，任何一条无关错误都能让测试变绿。
+ * 全部用临时目录里的合成文档，不读仓库真实字典：真实字典会随各 owner 提交而变，
+ * 测试跟着变就失去意义。每条失败断言都要求「错误原因 + 位置」，只断言退出码非 0
+ * 会让任何无关错误都能把测试变绿。
+ *
+ * 三组已知缺陷（本文件先复现再修）：
+ * 1. 带引号的默认值（'archived'）绕过枚举校验；
+ * 2. JSONB 内部属性的类型列为空仍通过；
+ * 3. 合法的「设计保留」状态被误判失败。
  */
 
 import assert from 'node:assert/strict'
@@ -25,11 +29,34 @@ const ID_ROW = '| id | 记录标识 | varchar(64) | 否 | 无；服务端生成 
 const STATUS_ROW =
   '| status | 状态 | varchar(16) | 否 | active | CHECK IN(active,disabled) | 无（非键） |'
 
-/** 拼一份字典文档。rows 为表格数据行（不含表头与分隔行）。 */
-function buildDoc({ owner = 'M2', title = 'items', meta = true, rows = [ID_ROW, STATUS_ROW] }) {
+/** platform.md 那种表级信息（用途/主键+索引/来源+读写/保留/状态）。 */
+const META_BULLETS = [
+  '- 用途：测试表；平台业务。',
+  '- 主键：`id`；索引：status 普通索引。',
+  '- 来源：合成seed；读写：服务端读写，学生只读。',
+  '- 保留/删除：停用不物理删除。',
+  '- 状态：设计草案；数据库实现与验证均未完成。',
+].join('\n')
+
+/** 拼一份字典文档。meta 为 true 时带完整表级信息。 */
+function buildDoc({
+  owner = 'M2',
+  title = 'items',
+  meta = META_BULLETS,
+  rows = [ID_ROW, STATUS_ROW],
+}) {
   const head = owner === null ? '# 测试文档' : `# 测试文档\n\nowner：${owner}`
-  const bullets = meta ? '- 用途：测试表\n- 状态：设计草案\n' : ''
+  const bullets = meta === null ? '' : `${meta}\n`
   return `${head}\n\n## ${title}\n\n${bullets}\n${HEADER}\n${SEPARATOR}\n${rows.join('\n')}\n`
+}
+
+/** 带 JSONB 小节与内部属性表的文档。 */
+function buildJsonbDoc({
+  attrRows,
+  jsonbRow = '| payload | 载荷 | jsonb | 否 | {} | 无 | 无（非键） |',
+}) {
+  const section = ['', '## JSONB内部字典', '', HEADER, SEPARATOR, ...attrRows, ''].join('\n')
+  return `${buildDoc({ rows: [ID_ROW, jsonbRow] })}${section}`
 }
 
 function makeRepo(files) {
@@ -57,6 +84,8 @@ function withRepo(files, callback) {
   }
 }
 
+/* ------------------------------------------------------------ 基线：能通过 */
+
 test('完整字典通过', () => {
   withRepo({ 'student.md': buildDoc({}) }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
@@ -64,6 +93,15 @@ test('完整字典通过', () => {
     assert.match(output, /结论：通过/)
   })
 })
+
+test('表级信息齐全（用途/索引/读写/保留/状态）不误报', () => {
+  withRepo({ 'student.md': buildDoc({}) }, (root) => {
+    const { output } = run(root, ['--files', 'student.md'])
+    assert.doesNotMatch(output, /表缺少/)
+  })
+})
+
+/* ----------------------------------------------------- 七列：缺列、空格、重名 */
 
 test('空单元格被拦下，并指出具体列', () => {
   const broken = '| status | 状态 | varchar(16) | 否 |  | CHECK IN(active) | 无（非键） |'
@@ -80,9 +118,38 @@ test('同表字段重名被拦下', () => {
   withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, STATUS_ROW, duplicate] }) }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
     assert.equal(status, 1, output)
-    assert.match(output, /字段 status 重复/)
+    assert.match(output, /字段 status 重复（首次出现在第 \d+ 行）/)
   })
 })
+
+test('列数不足七列，被拦下', () => {
+  const short = '| status | 状态 | varchar(16) | 否 | active | 无（非键） |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, short] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /列数为 6，应为 7/)
+  })
+})
+
+test('主键允许为空，被拦下', () => {
+  const broken = '| id | 记录标识 | varchar(64) | 是 | 无 | item_+32hex | PK |'
+  withRepo({ 'student.md': buildDoc({ rows: [broken] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /声明为主键却允许为空/)
+  })
+})
+
+test('可空列写成非 是/否，被拦下', () => {
+  const broken = '| note | 备注 | text | 可 | 无 | 无 | 无（非键） |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, broken] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /可空列「可」只能是 是\/否/)
+  })
+})
+
+/* ------------------------------------------------------------- FK 引用登记 */
 
 test('悬空外键被拦下', () => {
   const dangling = '| course_id | 所属课程 | varchar(64) | 否 | 无 | 无 | FK→ghost_courses.id |'
@@ -103,46 +170,199 @@ test('外键指向已登记表但不存在的列，被拦下', () => {
   })
 })
 
-test('默认值与枚举取值矛盾，被拦下', () => {
-  const contradiction =
+test('FK 列没给出目标表字段，被拦下', () => {
+  const vague = '| course_id | 所属课程 | varchar(64) | 否 | 无 | 无 | FK |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, vague] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /FK 列没有给出 表\.字段/)
+  })
+})
+
+test('「无物理FK」是合法写法，不误报', () => {
+  const noFk = '| target_id | 目标快照 | varchar(64) | 是 | NULL | 无 | 无物理FK；保留已删除目标 |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, noFk] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+  })
+})
+
+/* --------------------------------------------------- 默认值与枚举/CHECK 对账 */
+
+test('默认值与枚举取值矛盾（不带引号），被拦下', () => {
+  const row =
     '| status | 状态 | varchar(16) | 否 | archived | CHECK IN(active,disabled) | 无（非键） |'
-  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, contradiction] }) }, (root) => {
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
     assert.equal(status, 1, output)
     assert.match(output, /默认值「archived」不在取值范围/)
   })
 })
 
-test('主键允许为空，被拦下', () => {
-  const broken = '| id | 记录标识 | varchar(64) | 是 | 无 | item_+32hex | PK |'
-  withRepo({ 'student.md': buildDoc({ rows: [broken] }) }, (root) => {
+test("带引号的默认值同样对账（'archived' 不再绕过）", () => {
+  const row =
+    "| status | 状态 | varchar(16) | 否 | 'archived' | CHECK IN(active,disabled) | 无（非键） |"
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
     assert.equal(status, 1, output)
-    assert.match(output, /声明为主键却允许为空/)
+    assert.match(output, /默认值「archived」不在取值范围/)
   })
 })
 
-test('列数不足七列，被拦下', () => {
-  const short = '| status | 状态 | varchar(16) | 否 | active | 无（非键） |'
-  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, short] }) }, (root) => {
+test("带引号的合法默认值（'active'）通过", () => {
+  const row =
+    "| status | 状态 | varchar(16) | 否 | 'active' | CHECK IN(active,disabled) | 无（非键） |"
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
-    assert.equal(status, 1, output)
-    assert.match(output, /列数为 6，应为 7/)
+    assert.equal(status, 0, output)
   })
 })
+
+test('默认值为「无」时不做枚举对账，不误报', () => {
+  const row = '| kind | 类型 | varchar(16) | 否 | 无 | CHECK IN(a,b) | 无（非键） |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+  })
+})
+
+test('无法解析的 CHECK 表达式标记为未验证，而不是默认通过', () => {
+  const row = '| code | 编码 | varchar(32) | 否 | abc | CHECK char_length(code) > 0 | 无（非键） |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+    assert.match(output, /无法与取值范围表达式对账/)
+  })
+})
+
+/* ------------------------------------------------------------ JSONB 内部结构 */
+
+test('JSONB 列没有内部字典小节，被拦下', () => {
+  const jsonbRow = '| payload | 载荷 | jsonb | 否 | {} | 无 | 无（非键） |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, jsonbRow] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /没有「JSONB内部字典」小节/)
+  })
+})
+
+test('JSONB 列在内部字典里缺失，被拦下', () => {
+  const doc = buildJsonbDoc({
+    attrRows: [
+      '| other.schemaVersion | 其他载荷版本 | jsonb内string | 否 | 无 | 1.0 | 无（非键） |',
+    ],
+  })
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 列 payload 缺少 schemaVersion 属性/)
+    assert.match(output, /other\.schemaVersion 挂在未声明的 JSONB 列 other 下/)
+  })
+})
+
+test('JSONB 内部属性的类型列为空，仍被拦下', () => {
+  const doc = buildJsonbDoc({
+    attrRows: [
+      '| payload.schemaVersion | 载荷版本 | jsonb内string | 否 | 无 | 1.0 | 无（非键） |',
+      '| payload.chapterId | 章节 |  | 否 | 无 | 必填 | 无（非键） |',
+    ],
+  })
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 属性 payload\.chapterId 的第 3 列（PostgreSQL）为空/)
+  })
+})
+
+test('JSONB 列缺少 schemaVersion 属性，被拦下', () => {
+  const doc = buildJsonbDoc({
+    attrRows: ['| payload.chapterId | 章节 | jsonb内string | 否 | 无 | 必填 | 无（非键） |'],
+  })
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 列 payload 缺少 schemaVersion 属性/)
+  })
+})
+
+test('JSONB 属性重名被拦下', () => {
+  const doc = buildJsonbDoc({
+    attrRows: [
+      '| payload.schemaVersion | 载荷版本 | jsonb内string | 否 | 无 | 1.0 | 无（非键） |',
+      '| payload.schemaVersion | 又一个 | jsonb内string | 否 | 无 | 1.0 | 无（非键） |',
+    ],
+  })
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 属性 payload\.schemaVersion 重复/)
+  })
+})
+
+test('完整 JSONB 字典通过', () => {
+  const doc = buildJsonbDoc({
+    attrRows: [
+      '| payload.schemaVersion | 载荷版本 | jsonb内string | 否 | 无 | 1.0 | 无（非键） |',
+      '| payload.chapterId | 章节 | jsonb内string | 否 | 无 | 必填 | 无（非键） |',
+    ],
+  })
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+  })
+})
+
+/* ------------------------------------------------------------ 表级信息与状态 */
 
 test('表级「用途」「状态」缺失，被拦下', () => {
-  withRepo({ 'student.md': buildDoc({ meta: false }) }, (root) => {
+  withRepo({ 'student.md': buildDoc({ meta: null }) }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
     assert.equal(status, 1, output)
-    assert.match(output, /表缺少「用途」说明/)
-    assert.match(output, /表缺少「状态」说明/)
+    assert.match(output, /表缺少「用途」信息/)
+    assert.match(output, /表缺少「实现状态」信息/)
+  })
+})
+
+test('表级缺索引/读写权限/保留策略，分别被拦下', () => {
+  const meta = ['- 用途：测试表；平台业务。', '- 状态：设计草案'].join('\n')
+  withRepo({ 'student.md': buildDoc({ meta }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /表缺少「索引」信息/)
+    assert.match(output, /表缺少「读写权限」信息/)
+    assert.match(output, /表缺少「保留策略」信息/)
+  })
+})
+
+test('设计保留是合法状态，不误判失败', () => {
+  const meta = META_BULLETS.replace(
+    '- 状态：设计草案；数据库实现与验证均未完成。',
+    '- 状态：设计保留（S2 实体，本轮不建表）。',
+  )
+  withRepo({ 'student.md': buildDoc({ meta }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+  })
+})
+
+test('设计保留与已实现同时标注，视为矛盾', () => {
+  const meta = META_BULLETS.replace(
+    '- 状态：设计草案；数据库实现与验证均未完成。',
+    '- 状态：设计保留；迁移已实现。',
+  )
+  withRepo({ 'student.md': buildDoc({ meta }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /设计保留.*已实现/)
   })
 })
 
 test('状态不在四级口径内，被拦下', () => {
-  const doc = buildDoc({}).replace('- 状态：设计草案', '- 状态：差不多好了')
-  withRepo({ 'student.md': doc }, (root) => {
+  const meta = META_BULLETS.replace(
+    '- 状态：设计草案；数据库实现与验证均未完成。',
+    '- 状态：差不多好了。',
+  )
+  withRepo({ 'student.md': buildDoc({ meta }) }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
     assert.equal(status, 1, output)
     assert.match(output, /不在四级口径内/)
@@ -157,33 +377,7 @@ test('无 owner 标注被拦下', () => {
   })
 })
 
-test('JSONB 列没有内部字典，被拦下', () => {
-  const jsonbRow = '| payload | 载荷 | jsonb | 否 | {} | 无 | 无（非键） |'
-  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, jsonbRow] }) }, (root) => {
-    const { status, output } = run(root, ['--files', 'student.md'])
-    assert.equal(status, 1, output)
-    assert.match(output, /没有「JSONB内部字典」小节/)
-  })
-})
-
-test('JSONB 列在内部字典里缺失，被拦下', () => {
-  const jsonbRow = '| payload | 载荷 | jsonb | 否 | {} | 无 | 无（非键） |'
-  const jsonbSection = [
-    '',
-    '## JSONB内部字典',
-    '',
-    HEADER,
-    SEPARATOR,
-    '| other.schemaVersion | 其他载荷版本 | jsonb内string | 否 | 无 | 1.0 | 无（非键） |',
-    '',
-  ].join('\n')
-  const doc = `${buildDoc({ rows: [ID_ROW, jsonbRow] })}${jsonbSection}`
-  withRepo({ 'student.md': doc }, (root) => {
-    const { status, output } = run(root, ['--files', 'student.md'])
-    assert.equal(status, 1, output)
-    assert.match(output, /JSONB 列 payload 没有在/)
-  })
-})
+/* --------------------------------------------------------- 文件、模块与重复 */
 
 test('不登记表时缺少显式声明，被拦下', () => {
   const doc = '# 测试文档\n\nowner：M2\n\n只有映射，没有表。\n'
@@ -202,42 +396,11 @@ test('不登记表但写明声明，通过', () => {
   })
 })
 
-test('映射引用未登记的表只提醒，不阻塞', () => {
-  const doc = [
-    '# 测试文档',
-    '',
-    'owner：M2',
-    '',
-    '本文件不登记新表。',
-    '',
-    '## 映射',
-    '',
-    '| 前端字段 | 领域表.列 | 来源 |',
-    '| --- | --- | --- |',
-    '| title | future_courses.title | 未实现 |',
-    '',
-  ].join('\n')
-  withRepo({ 'student.md': doc }, (root) => {
-    const { status, output } = run(root, ['--files', 'student.md'])
-    assert.equal(status, 0, output)
-    assert.match(output, /未登记的表 future_courses/)
-  })
-})
-
-test('映射引用已登记表的不存在列，被拦下', () => {
-  const doc = [
-    buildDoc({}),
-    '## 映射',
-    '',
-    '| 前端字段 | 领域表.列 | 来源 |',
-    '| --- | --- | --- |',
-    '| ghost | items.ghost_column | 未实现 |',
-    '',
-  ].join('\n')
-  withRepo({ 'student.md': doc }, (root) => {
+test('空文件被拦下（不是静默通过）', () => {
+  withRepo({ 'student.md': '' }, (root) => {
     const { status, output } = run(root, ['--files', 'student.md'])
     assert.equal(status, 1, output)
-    assert.match(output, /映射引用了 items.ghost_column/)
+    assert.match(output, /文件为空/)
   })
 })
 
@@ -259,11 +422,7 @@ test('全量模式下文件齐全且有效，通过', () => {
     ['learning.md', 'courses'],
     ['analytics-admin.md', 'analytics_daily_metrics'],
   ]
-  const files = {
-    'README.md': '# 总览\n',
-    'erd.md': '# ER\n',
-    'acceptance.md': '# 验收\n',
-  }
+  const files = { 'README.md': '# 总览\n', 'erd.md': '# ER\n', 'acceptance.md': '# 验收\n' }
   modules.forEach(([file, table], index) => {
     files[file] = buildDoc({ owner: `M${index + 1}`, title: table })
   })
@@ -283,15 +442,123 @@ test('同一张表被两份文件重复登记，被拦下', () => {
     (root) => {
       const { status, output } = run(root, ['--files', 'learning.md,student.md'])
       assert.equal(status, 1, output)
-      assert.match(output, /表名与 docs\/data-model\/learning.md 重复登记/)
+      // 报在后登记的那份文件上，并指出与谁冲突；两份文件名都要出现。
+      assert.match(output, /docs\/data-model\/learning\.md\n/)
+      assert.match(output, /表名与 docs\/data-model\/student\.md 重复登记/)
     },
   )
 })
+
+/* ------------------------------------------------------------- 跨文件引用 */
+
+test('目标表所在文件未选中但已存在时，不误报未登记', () => {
+  const student = [
+    buildDoc({ owner: 'M2', title: 'student_maps' }),
+    '## 映射',
+    '',
+    '| 前端字段 | 领域表.列 | 来源 |',
+    '| --- | --- | --- |',
+    '| id | users.id | 未实现 |',
+    '',
+  ].join('\n')
+  withRepo(
+    { 'platform.md': buildDoc({ owner: 'M1', title: 'users' }), 'student.md': student },
+    (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 0, output)
+      assert.doesNotMatch(output, /未登记的表 users/)
+    },
+  )
+})
+
+test('局部模式：未登记的引用只提醒，不阻塞', () => {
+  const doc = [
+    '# 测试文档',
+    '',
+    'owner：M2',
+    '',
+    '本文件不登记新表。',
+    '',
+    '## 映射',
+    '',
+    '| 前端字段 | 领域表.列 | 来源 |',
+    '| --- | --- | --- |',
+    '| title | future_courses.title | 未实现 |',
+    '',
+  ].join('\n')
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+    assert.match(output, /未登记的表 future_courses/)
+    assert.match(output, /局部/)
+  })
+})
+
+test('全量模式：未登记的引用不得只提醒后仍宣称通过', () => {
+  const modules = [
+    ['platform.md', 'users'],
+    ['tutoring-knowledge.md', 'tutoring_sessions'],
+    ['avatar-media.md', 'avatar_profiles'],
+    ['learning.md', 'courses'],
+    ['analytics-admin.md', 'analytics_daily_metrics'],
+  ]
+  const files = { 'README.md': '# 总览\n', 'erd.md': '# ER\n', 'acceptance.md': '# 验收\n' }
+  modules.forEach(([file, table], index) => {
+    files[file] = buildDoc({ owner: `M${index + 1}`, title: table })
+  })
+  files['student.md'] = [
+    '# 测试文档',
+    '',
+    'owner：M2',
+    '',
+    '本文件不登记新表。',
+    '',
+    '## 映射',
+    '',
+    '| 前端字段 | 领域表.列 | 来源 |',
+    '| --- | --- | --- |',
+    '| title | future_courses.title | 未实现 |',
+    '',
+  ].join('\n')
+  withRepo(files, (root) => {
+    const { status, output } = run(root)
+    assert.equal(status, 1, output)
+    assert.match(output, /未登记的表 future_courses/)
+    assert.match(output, /未完成/)
+  })
+})
+
+test('映射引用已登记表的不存在列，被拦下', () => {
+  const doc = [
+    buildDoc({}),
+    '## 映射',
+    '',
+    '| 前端字段 | 领域表.列 | 来源 |',
+    '| --- | --- | --- |',
+    '| ghost | items.ghost_column | 未实现 |',
+    '',
+  ].join('\n')
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /映射引用了 items\.ghost_column/)
+  })
+})
+
+/* ------------------------------------------------------------------- 用法 */
 
 test('缺少 --files 的值时按用法错误处理', () => {
   withRepo({ 'student.md': buildDoc({}) }, (root) => {
     const { status, output } = run(root, ['--files'])
     assert.equal(status, 2, output)
     assert.match(output, /--files 需要一个逗号分隔的路径列表/)
+  })
+})
+
+test('未知参数按用法错误处理', () => {
+  withRepo({ 'student.md': buildDoc({}) }, (root) => {
+    const { status, output } = run(root, ['--verbose'])
+    assert.equal(status, 2, output)
+    assert.match(output, /未知参数/)
   })
 })

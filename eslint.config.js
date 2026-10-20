@@ -17,12 +17,6 @@ export default tseslint.config(
       '**/.venv/**',
       '**/__pycache__/**',
       '**/coverage/**',
-      // 仓库根 scripts/ 是 Node 原生工具（#70 的字典检查器），不属任何 TS 工程：
-      // 根目录没有 tsconfig.json、也没有 @types/node，硬纳入 projectService 会得到
-      // 486 条「type that could not be resolved」，全是解析噪声而非代码问题。
-      // 该目录的验证手段是 `node --test scripts/`，不是类型检查——所以这里忽略，
-      // 而不是给它装一套只为 lint 存在的依赖。
-      'scripts/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -32,6 +26,29 @@ export default tseslint.config(
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+  {
+    // 仓库根 `scripts/` 是 Node 原生工具（#70 的字典检查器），不属于任何 TS 工程：
+    // 根目录没有 tsconfig.json、也没有 @types/node。若沿用上面的 projectService，
+    // 会得到大量「type that could not be resolved」解析噪声；若整目录 ignore，
+    // 又会让新增脚本失去语法与规则检查。
+    //
+    // 因此这里只对这一个目录**关掉类型感知**（保留 eslint 规则本身）：
+    // - projectService: false —— 走默认 parser，不再要求文件属于某个 tsconfig；
+    // - disableTypeChecked —— 关掉依赖类型信息的规则（no-unsafe-* 等）。
+    // 类型层由该目录自己的 `node --test` 与运行时断言覆盖，而不是假装有 TS 工程。
+    files: ['scripts/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+      },
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      // 脚本用 console 输出检查结果，这是它的正常产出渠道，不是调试残留。
+      'no-console': 'off',
     },
   },
 )
