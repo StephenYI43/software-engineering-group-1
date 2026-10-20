@@ -1,4 +1,12 @@
-"""S0 liveness API plus S1 login/logout (Issue #45). No database yet."""
+"""S0 liveness API plus S1 login/logout (Issue #45). No database yet.
+
+The tutoring router is **not mounted by default**. It still uses a synthetic
+principal and a Mock model, so exposing it on the production app would make every
+external caller the same user. `create_dev_app()` is the explicit development
+factory that mounts it; tests opt in the same way. Issue #16 will replace the
+synthetic principal with real `require_user` / course access and then the router
+can be mounted unconditionally.
+"""
 
 from collections.abc import Awaitable, Callable
 from typing import Literal
@@ -18,7 +26,7 @@ class HealthResponse(BaseModel):
     request_id: str = Field(serialization_alias="requestId")
 
 
-def create_app() -> FastAPI:
+def create_app(*, enable_mock_tutoring: bool = False) -> FastAPI:
     application = FastAPI(
         title="大学生辅助学习 AI 数字人系统 API",
         version="0.1.0",
@@ -42,9 +50,22 @@ def create_app() -> FastAPI:
         response.headers["Cache-Control"] = "no-store"
         return HealthResponse(request_id=request.state.request_id)
 
-    application.include_router(tutoring_router)
+    if enable_mock_tutoring:
+        application.include_router(tutoring_router)
 
     return application
+
+
+def create_dev_app() -> FastAPI:
+    """Explicit development factory: Mock model, static retrieval, synthetic principal.
+
+    **Never expose this app.** It exists for local end-to-end runs and tests
+    before #16 lands. The production entrypoint is `app` below, which does not
+    mount the tutoring router, and there is no environment variable that can turn
+    this bypass on.
+    """
+
+    return create_app(enable_mock_tutoring=True)
 
 
 app = create_app()

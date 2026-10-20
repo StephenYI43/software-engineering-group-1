@@ -24,7 +24,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
 
 from app.domains.tutoring.adapters import MockModelClient
 from app.domains.tutoring.principal import Principal, can_reach_course, get_principal
@@ -32,7 +31,6 @@ from app.domains.tutoring.prompt_renderer import load_prompt_template
 from app.domains.tutoring.repository import (
     InMemoryTutoringRepository,
     TurnInProgressError,
-    TurnStatus,
     UnknownTurnError,
 )
 from app.domains.tutoring.retrieval import StaticRetriever
@@ -50,19 +48,6 @@ _SSE_HEADERS: dict[str, str] = {
     "Cache-Control": "no-store",
     "X-Accel-Buffering": "no",
 }
-
-
-class StopTurnResponse(BaseModel):
-    """The body of a successful stop.
-
-    Not part of `packages/contracts/`: the contract fixes the endpoint's behaviour
-    but not its response body, so this lives beside the endpoint rather than in the
-    schema module that mirrors the contract. It reports the turn's status *after*
-    the call, which is what makes a repeated stop truthful -- see the PR notes.
-    """
-
-    turn_id: str = Field(serialization_alias="turnId")
-    status: TurnStatus
 
 
 def get_service(request: Request) -> TutoringService:
@@ -174,8 +159,9 @@ async def create_message(
 
 @router.post(
     "/sessions/{session_id}/turns/{turn_id}/stop",
+    status_code=204,
     responses={
-        200: {"description": "The turn's status after the call"},
+        204: {"description": "The turn was known; the stream will carry the terminal event"},
         404: {"description": "No such turn in this session"},
     },
 )
@@ -187,6 +173,12 @@ async def stop_turn(
 ) -> Response:
     """Stop a live turn. Idempotent, and it holds no state of its own.
 
+    A known turn answers **204 with no body**, whatever its internal state
+    (active, already stopped, already completed). The client only checks for 2xx
+    and treats the SSE terminal event as authoritative; the internal state enum is
+    not part of the wire contract. An unknown turn is **404**
+    `TUTORING_TURN_NOT_FOUND`.
+
     `async def` is not decoration. A synchronous handler would be run in a worker
     thread, and the stop signal would then be set from a thread other than the one
     the stream is running on. It writes no events: the streaming task is the only
@@ -194,7 +186,7 @@ async def stop_turn(
     """
 
     try:
-        status = service.stop(session_id, turn_id, request.state.request_id)
+        service.stop(session_id, turn_id, request.state.request_id)
     except UnknownTurnError:
         return _error_response(
             request,
@@ -203,7 +195,4 @@ async def stop_turn(
             message="未找到该答疑轮次",
         )
 
-    return JSONResponse(
-        status_code=200,
-        content=StopTurnResponse(turn_id=turn_id, status=status).model_dump(by_alias=True),
-    )
+    return Response(status_code=204)

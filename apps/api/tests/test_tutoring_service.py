@@ -971,7 +971,7 @@ def test_the_service_is_shared_by_both_endpoints() -> None:
     """A turn claimed on one request has to be visible to the next one, which is
     only true while there is exactly one repository behind both routes."""
 
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(enable_mock_tutoring=True)) as client:
         streamed = client.post(
             f"/api/v1/tutoring/sessions/{_SESSION}/messages",
             json={"content": "什么是函数的极限？"},
@@ -979,8 +979,8 @@ def test_the_service_is_shared_by_both_endpoints() -> None:
         turn_id = _turn_id_of(streamed.text)
         stopped = client.post(f"/api/v1/tutoring/sessions/{_SESSION}/turns/{turn_id}/stop")
 
-    assert stopped.status_code == 200
-    assert stopped.json() == {"turnId": turn_id, "status": "completed"}
+    assert stopped.status_code == 204
+    assert stopped.content == b""
 
 
 def _turn_id_of(body: str) -> str:

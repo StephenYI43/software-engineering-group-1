@@ -78,9 +78,10 @@ _ENVELOPES: dict[str, dict[str, object]] = {
 #: `completed.response.content`, because the contract requires `content` to equal
 #: the concatenated deltas character for character
 #: (`packages/contracts/tutoring/samples/05-sse-stream.txt:26-27`) and the newline
-#: is sent as a delta before the marker is even recognised. Frozen sample `01`
-#: predates the envelope convention and has no trailing newline, so the two differ
-#: by exactly this character; see the PR notes. Change this constant to drop it.
+#: is sent as a delta before the marker is even recognised. Samples `01` and `03`
+#: were revised to include this newline, so the service output and the frozen
+#: samples agree byte for byte. Changing this constant would require revising
+#: those samples and the tests that compare against them.
 _ENVELOPE_SEPARATOR: Final[str] = "\n"
 
 

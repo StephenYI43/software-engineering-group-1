@@ -13,6 +13,12 @@ bypass that an *external request can activate* is forbidden outright
 Every request is the same synthetic student. The only way to change that is to
 replace this provider, which is what #16 will do by binding the real one over it.
 
+Because identity is fixed, the tutoring router is **not mounted on the production
+app**. `app.main.create_app()` leaves it out; only `create_dev_app()` (and tests
+that opt in with `enable_mock_tutoring=True`) mount it. This is the second half of
+the same rule: even a bypass that reads nothing from the request must not be
+reachable at a public URL before real authentication exists.
+
 There is no FastAPI import here on purpose. The decision is a plain function over
 two values, and the router is left to shape the refusal, so the access rule can be
 tested without a client and there is exactly one place that decides what a refusal

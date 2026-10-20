@@ -126,14 +126,11 @@ def test_the_mock_stays_deterministic_with_the_envelope_on() -> None:
 
 
 def test_the_normal_envelope_matches_the_frozen_sample() -> None:
-    """`normal` must reproduce `01-thought-with-citation.json`.
+    """`normal` must reproduce `01-thought-with-citation.json` exactly.
 
-    The body differs from that sample by exactly the separator newline: the
-    sample predates the envelope convention, which the template introduced
-    afterwards. That is written down here rather than smoothed over, because
-    `content` must equal the concatenated deltas character for character and the
-    newline is dispatched before the marker is recognised
-    (`samples/05-sse-stream.txt:26-27`).
+    The sample now includes the separator newline, because `content` must equal
+    the concatenated deltas character for character and the newline is dispatched
+    before the marker is recognised (`samples/05-sse-stream.txt:26-27`).
     """
 
     sample = _sample("01-thought-with-citation.json")
@@ -144,7 +141,7 @@ def test_the_normal_envelope_matches_the_frozen_sample() -> None:
     assert outcome.envelope.emotion == sample["emotion"]
     assert outcome.envelope.action == sample["action"]
     assert outcome.envelope.citations == ["c1"]
-    assert outcome.body == f"{sample['content']}\n"
+    assert outcome.body == sample["content"]
 
 
 def test_the_no_evidence_envelope_matches_the_frozen_sample() -> None:
@@ -158,7 +155,7 @@ def test_the_no_evidence_envelope_matches_the_frozen_sample() -> None:
     assert outcome.envelope.emotion == sample["emotion"]
     assert outcome.envelope.action == sample["action"]
     assert outcome.envelope.citations == []
-    assert outcome.body == f"{sample['content']}\n"
+    assert outcome.body == sample["content"]
 
 
 @pytest.mark.parametrize("chunks", [(), (_CHUNK,)])

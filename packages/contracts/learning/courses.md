@@ -255,4 +255,4 @@ S1 范围（`docs/requirements.md:18` F09 首版只覆盖单门高数示范课�
 | `RATE_LIMITED` | 429 | 列表接口超限 |
 
 **越权一律返回 404 而非 403**（除「角色不符」这种不暴露资源存在性的场景返回 403），
-与 `docs/code-standards.md:82` 与 tutoring-response.md:194 一致。
+与 `docs/code-standards.md:82` 与 tutoring-response.md:195 一致。

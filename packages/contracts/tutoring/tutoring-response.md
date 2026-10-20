@@ -68,7 +68,7 @@
 | `turnId` | string | 是 | 本轮唯一标识 |
 | `sessionId` | string | 是 | 会话标识 |
 | `stage` | string | 是 | 教学阶段，见下方枚举。**由服务端状态机计算，非模型输出** |
-| `content` | string | 是 | 本轮回答文本 |
+| `content` | string | 是 | 本轮回答文本。**必须与本次流中全部 `delta.textDelta` 的拼接逐字节相等**；模型在响应信封前另起的换行也计入，因此可能以 `\n` 结尾 |
 | `citations` | array | 是 | 引用列表，无依据时为空数组 `[]`，**不得为 null** |
 | `hasEvidence` | boolean | 是 | 是否检索到依据 |
 | `followUps` | array[string] | 是 | 建议追问，最多 3 条，每条最多 200 字符 |
@@ -186,6 +186,7 @@
 | --- | --- | --- |
 | `TUTORING_SESSION_NOT_FOUND` | 404 | 会话不存在，**或不属于当前用户** |
 | `TUTORING_TURN_IN_PROGRESS` | 409 | 同一会话已有进行中的回答 |
+| `TUTORING_TURN_NOT_FOUND` | 404 | stop 指定的轮次不存在（或不属于当前会话），防枚举 |
 | `TUTORING_NO_EVIDENCE` | — | 不是错误响应用，见下方说明 |
 | `MODEL_OUTPUT_INVALID` | — | 模型输出无法通过校验，以 `error` 事件下发 |
 | `RATE_LIMITED` | 429 | 超出并发流上限 |

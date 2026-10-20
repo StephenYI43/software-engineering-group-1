@@ -36,7 +36,7 @@ from app.domains.tutoring.prompt_renderer import load_prompt_template
 from app.domains.tutoring.repository import InMemoryTutoringRepository
 from app.domains.tutoring.retrieval import StaticRetriever
 from app.domains.tutoring.service import TutoringService
-from app.main import create_app
+from app.main import create_app, create_dev_app
 
 _SESSION = "sess_5c1e7a93"
 _MESSAGES = f"/api/v1/tutoring/sessions/{_SESSION}/messages"
@@ -99,7 +99,7 @@ def _app(**kwargs: object) -> object:
     -- the same seam a later slice will use for the real one.
     """
 
-    application = create_app()
+    application = create_app(enable_mock_tutoring=True)
     application.state.tutoring_service = _service(**kwargs)  # type: ignore[arg-type]
     return application
 
@@ -314,21 +314,52 @@ def test_a_stop_ends_a_stream_that_is_running_right_now() -> None:
 
     response = streamed["response"]
     assert response.status_code == 200
-    assert stopped.status_code == 200
+    assert stopped.status_code == 204
+    assert stopped.content == b""
     frames = _frames(response.text)
     assert _names(frames)[-1] == "stopped"
     assert frames[-1][1]["reason"] == "client_stop"
     assert frames[-1][1]["turnId"] == turn_id
 
 
-def test_a_stop_that_arrives_after_the_turn_completed_says_so() -> None:
+def test_a_stop_that_arrives_after_the_turn_completed_returns_no_content() -> None:
     with TestClient(_app()) as client:
         frames = _frames(client.post(_MESSAGES, json={"content": _QUESTION}).text)
         turn_id = frames[0][1]["turnId"]
         response = client.post(_STOP.format(turn_id=turn_id))
 
-    assert response.status_code == 200
-    assert response.json() == {"turnId": turn_id, "status": "completed"}
+    assert response.status_code == 204
+    assert response.content == b""
+
+
+def test_stopping_a_turn_twice_is_still_no_content() -> None:
+    """Known turns answer 204 regardless of their internal state.
+
+    The first stop wins and the second finds a settled turn; the client is not
+    told which, because the state enum is not part of the wire contract.
+    """
+
+    reached = threading.Event()
+    repository = InMemoryTutoringRepository()
+
+    with TestClient(_app(client=_GatedClient(reached), repository=repository)) as client:
+        streamed: dict[str, object] = {}
+
+        def ask() -> None:
+            streamed["response"] = client.post(_MESSAGES, json={"content": _QUESTION})
+
+        worker = threading.Thread(target=ask, daemon=True)
+        worker.start()
+        assert reached.wait(timeout=10), "the turn never started"
+        turn_id = repository.session(_SESSION).active_turn_id
+
+        first = client.post(_STOP.format(turn_id=turn_id))
+        worker.join(timeout=10)
+        second = client.post(_STOP.format(turn_id=turn_id))
+
+    assert first.status_code == 204
+    assert second.status_code == 204
+    assert first.content == second.content == b""
 
 
 def test_stopping_an_unknown_turn_is_not_found() -> None:
@@ -349,7 +380,29 @@ def test_both_endpoints_see_the_same_turn() -> None:
         turn_id = frames[0][1]["turnId"]
         response = client.post(_STOP.format(turn_id=turn_id))
 
-    assert response.json()["turnId"] == turn_id
+    assert response.status_code == 204
+
+
+def test_the_production_app_does_not_mount_the_mock_tutoring_routes() -> None:
+    """The synthetic principal makes every caller the same user.
+
+    Until #16 wires real authentication, the production entrypoint must not
+    expose these routes at all -- not even behind a flag an external request
+    could flip.
+    """
+
+    with TestClient(create_app()) as client:
+        response = client.post(_MESSAGES, json={"content": _QUESTION})
+
+    assert response.status_code == 404
+
+
+def test_the_explicit_dev_factory_mounts_the_mock_routes() -> None:
+    with TestClient(create_dev_app()) as client:
+        response = client.post(_MESSAGES, json={"content": _QUESTION})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
 
 
 # --- the connection dropping ------------------------------------------------
