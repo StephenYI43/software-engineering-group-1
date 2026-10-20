@@ -17,5 +17,5 @@ const SUBJECT_LABEL: Record<string, string> = {
 }
 
 export function subjectLabel(subject: string): string {
-  return SUBJECT_LABEL[subject] ?? subject
+  return Object.hasOwn(SUBJECT_LABEL, subject) ? (SUBJECT_LABEL[subject] ?? subject) : subject
 }
