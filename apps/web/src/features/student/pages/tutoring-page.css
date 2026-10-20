@@ -1,0 +1,27 @@
+.tutoring-form {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.tutoring-form textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  padding: 10px;
+  font: inherit;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.tutoring-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tutoring-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
