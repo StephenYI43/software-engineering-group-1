@@ -63,6 +63,25 @@ def has_activity_in_period(
     return any(period.contains(moment) for moment in moments)
 
 
+def latest_included_occurred_at(
+    state: AnalyticsState, user_ids: Collection[str], period: Period, course_id: str | None
+) -> datetime | None:
+    """本响应实际纳入的最新事件发生时间；本班本课程本周期内无事件返回 None。
+
+    只统计「本班学生 × 本课程 × 本查询周期」内的事件，**不是**全局消费游标：
+    全局游标可能来自其他课程、也可能晚于 `period.end`，直接拿它当 `dataThrough`
+    会让响应谎报数据截止时间（`statistics-api.md`「响应结构」，M1 复审阻断 #1）。
+    """
+    if course_id is None:
+        return None
+    latest: datetime | None = None
+    for user_id in user_ids:
+        for moment in state.activity.get(user_id, {}).get(course_id, ()):
+            if period.contains(moment) and (latest is None or moment > latest):
+                latest = moment
+    return latest
+
+
 def duration_seconds(
     state: AnalyticsState, user_id: str, period: Period, course_id: str
 ) -> int | None:

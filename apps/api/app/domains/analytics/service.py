@@ -49,6 +49,22 @@ DEFAULT_PAGE_SIZE = 50
 logger = logging.getLogger(__name__)
 
 
+def _has_reached(cursor: Cursor | None, watermark: Cursor, period: Period) -> bool:
+    """本域游标是否已追平「周期终点与上游水位中较小者」。
+
+    上游水位落在周期内时（`watermark.occurred_at < period.end`）必须比较**完整**
+    游标 `(occurredAt, eventId)`：同一时刻可能有多条事件，只比 `occurred_at` 会在
+    游标还落后于同时间戳的更大 `eventId` 时错误报告 complete——契约「消费位点」
+    把 `eventId` 定为同时间戳下的确定性 tie-breaker（M1 复审 2026-10-01 阻断 #2）。
+    水位已越过周期终点时，周期左闭右开，只用 `occurred_at` 与 `period.end` 比较即可。
+    """
+    if cursor is None:
+        return False
+    if watermark.occurred_at < period.end:
+        return cursor >= watermark
+    return cursor.occurred_at >= period.end
+
+
 @dataclass(frozen=True)
 class PollResult:
     """一轮消费的结果，供日志与走查使用。"""
@@ -184,7 +200,11 @@ class AnalyticsService:
             class_id=class_id,
             course_id=course_id,
             period=self._period_response(period),
-            data_through=state.cursor.occurred_at if state.cursor is not None else None,
+            # dataThrough 是「本响应纳入的最新事件时间」，不是全局游标：全局游标
+            # 可能来自其他课程、也可能晚于 period.end（M1 复审 2026-10-01 阻断 #1）。
+            data_through=aggregation.latest_included_occurred_at(
+                state, student_ids, period, course_id
+            ),
             generated_at=now,
             consumption=self._consumption(state, period),
             summary=self._summary(rows, students_with_data, course_id),
@@ -217,10 +237,10 @@ class AnalyticsService:
         if watermark is None:
             # 上游无事件：本域游标无论在哪，都已经处在消费尽头。
             return Consumption(data_state="complete", upstream_watermark=None)
-        bound = min(period.end, watermark.occurred_at)
-        if state.cursor is not None and state.cursor.occurred_at >= bound:
-            return Consumption(data_state="complete", upstream_watermark=watermark.occurred_at)
-        return Consumption(data_state="partial", upstream_watermark=watermark.occurred_at)
+        return Consumption(
+            data_state="complete" if _has_reached(state.cursor, watermark, period) else "partial",
+            upstream_watermark=watermark.occurred_at,
+        )
 
     def _summary(
         self,

@@ -395,3 +395,110 @@ def test_students_pagination_slices_rows(
     assert beyond.students.page_size == 50
     assert beyond.students.total == 3
     assert beyond.students.items == []
+
+
+def test_data_through_null_when_only_other_courses_have_events(
+    roster, request_time, class_id, course_map, event_factory
+) -> None:
+    """其他课程有事件（全局游标非空）但本班本课程无事件：dataThrough 必须是 null。
+
+    直接拿全局游标当 dataThrough，会把别班的消费进度谎报成本班的数据截止时间
+    （M1 复审 2026-10-01 阻断 #1）。
+    """
+    store = InMemoryAnalyticsStore()
+    other_course = [
+        event_factory(
+            event_type="chapter_viewed",
+            occurred_at="2026-09-16T10:00:00Z",
+            payload={},
+            course_id="course_mock_c99",
+        )
+    ]
+    AnalyticsConsumer(InMemoryEventSource(other_course), store).poll_once()
+    assert store.load().cursor is not None  # 全局游标确实非空
+
+    overview = make_service(store, roster, request_time, course_map).get_overview(
+        class_id=class_id, query=PeriodQuery()
+    )
+
+    assert overview.data_through is None
+
+
+def test_data_through_limited_to_query_period(
+    roster, request_time, class_id, course_map, event_factory
+) -> None:
+    """同课程还有更新事件、但落在查询周期之外：dataThrough 只取周期内最新事件。
+
+    `last7d` 在 request_time 下的区间终点是 `2026-09-16T16:00Z`，故 `09-20` 的事件
+    不在周期内，不能被当成 dataThrough（M1 复审 2026-10-01 阻断 #1）。
+    """
+    events = [
+        event_factory(event_type="chapter_viewed", occurred_at="2026-09-15T01:00:00Z", payload={}),
+        event_factory(event_type="chapter_viewed", occurred_at="2026-09-20T01:00:00Z", payload={}),
+    ]
+    store = InMemoryAnalyticsStore()
+    AnalyticsConsumer(InMemoryEventSource(events), store).poll_once()
+    cursor = store.load().cursor
+    assert cursor is not None
+    assert cursor.occurred_at == datetime(2026, 9, 20, 1, 0, tzinfo=UTC)
+
+    overview = make_service(store, roster, request_time, course_map).get_overview(
+        class_id=class_id, query=PeriodQuery()
+    )
+
+    assert overview.data_through == datetime(2026, 9, 15, 1, 0, tzinfo=UTC)
+
+
+def test_consumption_partial_when_same_timestamp_not_caught_up(
+    roster, request_time, class_id, course_map, event_factory
+) -> None:
+    """同一时间戳两条事件、游标只到较小 eventId：必须判 partial 而不是 complete。
+
+    只比 `occurred_at` 会在游标尚未读到同时间戳的更大 `eventId` 时错报 complete
+    （M1 复审 2026-10-01 阻断 #2）。
+    """
+    same_instant = "2026-09-15T01:00:00Z"
+    events = [
+        event_factory(event_type="chapter_viewed", occurred_at=same_instant, payload={}),
+        event_factory(event_type="chapter_viewed", occurred_at=same_instant, payload={}),
+    ]
+    store = InMemoryAnalyticsStore()
+    # 只消费第一条（eventId 较小者），上游水位却停在第二条
+    AnalyticsConsumer(InMemoryEventSource(events), store, batch_size=1).poll_once()
+
+    service = AnalyticsService(
+        store=store,
+        roster=roster,
+        course_map=course_map,
+        upstream=InMemoryEventSource(events),
+        clock=lambda: request_time,
+    )
+
+    overview = service.get_overview(class_id=class_id, query=PeriodQuery())
+
+    assert overview.consumption.data_state == "partial"
+
+
+def test_consumption_complete_when_same_timestamp_caught_up(
+    roster, request_time, class_id, course_map, event_factory
+) -> None:
+    """同一时间戳两条事件、游标已到较大 eventId：complete。"""
+    same_instant = "2026-09-15T01:00:00Z"
+    events = [
+        event_factory(event_type="chapter_viewed", occurred_at=same_instant, payload={}),
+        event_factory(event_type="chapter_viewed", occurred_at=same_instant, payload={}),
+    ]
+    store = InMemoryAnalyticsStore()
+    AnalyticsConsumer(InMemoryEventSource(events), store).poll_once()
+
+    service = AnalyticsService(
+        store=store,
+        roster=roster,
+        course_map=course_map,
+        upstream=InMemoryEventSource(events),
+        clock=lambda: request_time,
+    )
+
+    overview = service.get_overview(class_id=class_id, query=PeriodQuery())
+
+    assert overview.consumption.data_state == "complete"
