@@ -110,3 +110,36 @@ describe('request', () => {
     expect(error.status).toBeNull()
   })
 })
+
+describe('请求协议边界', () => {
+  it.each([
+    new Headers({ Authorization: 'Bearer synthetic-only' }),
+    [['Authorization', 'Bearer synthetic-only']] as [string, string][],
+    { Authorization: 'Bearer synthetic-only' },
+  ])('保留每种 HeadersInit 的凭证', async (headers) => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ ok: true }, 200))
+    vi.stubGlobal('fetch', fetch)
+    await request('/api/v1/x', { headers })
+    const sent = new Headers(fetch.mock.calls[0]?.[1]?.headers)
+    expect(sent.get('Authorization')).toBe('Bearer synthetic-only')
+    expect(sent.get('Accept')).toBe('application/json')
+  })
+
+  it('拒绝 200 的非 JSON，保留服务端响应头 requestId', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('<html>bad</html>', {
+          status: 200,
+          headers: { 'X-Request-ID': 'req_synthetic_only' },
+        }),
+      ),
+    )
+    await expect(request('/api/v1/x')).rejects.toMatchObject({
+      name: 'ApiError',
+      kind: 'server',
+      status: 200,
+      requestId: 'req_synthetic_only',
+    })
+  })
+})
