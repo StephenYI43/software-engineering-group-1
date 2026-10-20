@@ -17,6 +17,12 @@ export default tseslint.config(
       '**/.venv/**',
       '**/__pycache__/**',
       '**/coverage/**',
+      // 仓库根 scripts/ 是 Node 原生工具（#70 的字典检查器），不属任何 TS 工程：
+      // 根目录没有 tsconfig.json、也没有 @types/node，硬纳入 projectService 会得到
+      // 486 条「type that could not be resolved」，全是解析噪声而非代码问题。
+      // 该目录的验证手段是 `node --test scripts/`，不是类型检查——所以这里忽略，
+      // 而不是给它装一套只为 lint 存在的依赖。
+      'scripts/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
