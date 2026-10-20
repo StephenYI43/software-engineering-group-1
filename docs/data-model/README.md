@@ -7,7 +7,8 @@
 
 main `d01f32e` 已有健康检查与演示认证；learning 只有契约附属的表概览，PR #60 是未合并的 dataclass/InMemory 骨架。
 尚无完整全域数据字典、数据库连接和迁移，也没有重启后保留记录的验收证据。
-本次先交付统一格式、全域关系草图与平台七表的字段设计，后续领域文档由各 owner 提交。
+模型基线PR #73先交统一格式、全域关系草图与平台七表字段设计；#48任务分支已增量实现平台七表迁移、认证持久化与真实PG验证，仍待评审合入。后续领域由各owner提交。
+平台接入与验证证据见 [数据库指南](platform-verification.md)。
 
 ## 七要素工作格式
 
@@ -24,14 +25,14 @@ main `d01f32e` 已有健康检查与演示认证；learning 只有契约附属�
 
 ## 模块清单与唯一负责人
 
-| 模块          | 业务覆盖                                                                                                                                               | 管理覆盖                                                                                                     | 本域文件/任务                   | 当前文档状态                     |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------- | -------------------------------- |
-| 平台/M1       | users、user_profiles、auth_sessions                                                                                                                    | roles、user_roles、admin_audit_logs、system_config_versions                                                  | [platform.md](platform.md)；#48 | 本PR提出七表草案，未建表         |
-| 学生端/M2     | 课程/作业/错题/计划/答疑字段到已有域的映射                                                                                                             | 持久偏好归属、UI临时态说明、字典检查与验收                                                                   | `student.md`；#70               | 待M2提交；不重复建业务表         |
-| 答疑知识/M3   | tutoring_sessions、tutoring_turns、turn_citations、documents、document_chunks                                                                          | document_grants、document_import_jobs、prompt_versions、model_config_versions                                | `tutoring-knowledge.md`；#71    | 待M3提交                         |
-| 数字人媒体/M4 | avatar_profiles、playback_records、focus_sessions                                                                                                      | media_assets、media_jobs、avatar_config_versions                                                             | `avatar-media.md`；#72          | 待M4提交                         |
-| 学习业务/M5   | courses、classes、chapters、enrollments、teaching_assignments、assignments、submissions、mistakes、study_plans、plan_items、reminders、learning_events | 发布/批阅/幂等/选课与授课维护；通用审计复用M1                                                                | `learning.md`；#42              | 有契约概览；七要素与真实DB待提交 |
-| 分析教师/M6   | analytics_daily_metrics、analytics_report_snapshots                                                                                                    | analytics_consumers、analytics_processed_events、analytics_quarantined_events、report_jobs；授权花名册复用M5 | `analytics-admin.md`；#65       | 有统计契约；七要素与真实DB待提交 |
+| 模块          | 业务覆盖                                                                                                                                               | 管理覆盖                                                                                                     | 本域文件/任务                   | 当前文档状态                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------- | -------------------------------------- |
+| 平台/M1       | users、user_profiles、auth_sessions                                                                                                                    | roles、user_roles、admin_audit_logs、system_config_versions                                                  | [platform.md](platform.md)；#48 | 任务分支已迁移及真实PG验证，待评审合入 |
+| 学生端/M2     | 课程/作业/错题/计划/答疑字段到已有域的映射                                                                                                             | 持久偏好归属、UI临时态说明、字典检查与验收                                                                   | `student.md`；#70               | 待M2提交；不重复建业务表               |
+| 答疑知识/M3   | tutoring_sessions、tutoring_turns、turn_citations、documents、document_chunks                                                                          | document_grants、document_import_jobs、prompt_versions、model_config_versions                                | `tutoring-knowledge.md`；#71    | 待M3提交                               |
+| 数字人媒体/M4 | avatar_profiles、playback_records、focus_sessions                                                                                                      | media_assets、media_jobs、avatar_config_versions                                                             | `avatar-media.md`；#72          | 待M4提交                               |
+| 学习业务/M5   | courses、classes、chapters、enrollments、teaching_assignments、assignments、submissions、mistakes、study_plans、plan_items、reminders、learning_events | 发布/批阅/幂等/选课与授课维护；通用审计复用M1                                                                | `learning.md`；#42              | 有契约概览；七要素与真实DB待提交       |
+| 分析教师/M6   | analytics_daily_metrics、analytics_report_snapshots                                                                                                    | analytics_consumers、analytics_processed_events、analytics_quarantined_events、report_jobs；授权花名册复用M5 | `analytics-admin.md`；#65       | 有统计契约；七要素与真实DB待提交       |
 
 这些表名中仅 learning 的已有契约名称应视作已接受的基线，其余候选名称须领域 owner 与消费者确认。
 S2实体可先设计，但必须标“设计保留”；持久化课堂验收先完成S1小闭环。
@@ -53,7 +54,7 @@ S2实体可先设计，但必须标“设计保留”；持久化课堂验收先
 选型沿用 #48 的已发布方向：PostgreSQL17、SQLAlchemy2同步Session、psycopg3、Alembic。
 准确依赖版本、镜像小版本/摘要由 #48 实测锁定，不使用latest。
 一个Base、SessionFactory和元数据注册入口，由M1维护；M5协调单一Alembic迁移链。
-本PR不新增这些实现，也不修改JWT、API、角色授权行为。
+模型基线PR #73本身不新增实现；#48后续实现保持JWT/登录响应兼容，数据库模式下持久化账号与会话。课程ACL仍由#16交付。
 
 数据字典不完整时先提交明确差异；不得为让校验通过临时填“待定”或吞掉缺表错误。
 每个字段都应能定位到契约/需求和实际迁移；设计保留实体不计入已持久化数量。

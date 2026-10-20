@@ -16,9 +16,11 @@ from app.core.auth.accounts import Account, verify_credentials
 from app.core.auth.schemas import LoginRequest, LoginResponse, LogoutResponse
 from app.core.auth.settings import AuthSettings
 from app.core.auth.tokens import SessionAuthority
+from app.core.db.repository import DatabaseSessionStore, PlatformRepository
+from app.core.db.session import Database
 
 
-def create_auth_router(settings: AuthSettings) -> APIRouter:
+def create_auth_router(settings: AuthSettings, database: Database | None = None) -> APIRouter:
     """Build the auth router against one resolved settings snapshot."""
     authority = SessionAuthority(
         secret=settings.session_secret, ttl_seconds=settings.session_ttl_seconds
@@ -28,6 +30,26 @@ def create_auth_router(settings: AuthSettings) -> APIRouter:
 
     @router.post("/login", response_model=LoginResponse)
     def login(payload: LoginRequest, request: Request) -> LoginResponse | JSONResponse:
+        if database is not None:
+            with database.sessions.begin() as session:
+                user = PlatformRepository(session).authenticate(payload.username, payload.password)
+                if user is None:
+                    return error_response(request, 401, "INVALID_CREDENTIALS", "用户名或密码错误")
+                persistent = SessionAuthority(
+                    settings.session_secret,
+                    settings.session_ttl_seconds,
+                    DatabaseSessionStore(session, request.state.request_id),
+                )
+                issued = persistent.issue(user)
+                PlatformRepository(session).audit(
+                    actor_user_id=user.user_id,
+                    action="session_issued",
+                    target_type="users",
+                    target_id=user.user_id,
+                    request_id=request.state.request_id,
+                )
+                result = LoginResponse(token=issued.token, expires_at=issued.expires_at, user=user)
+            return result
         user = verify_credentials(accounts, payload.username, payload.password)
         if user is None:
             return error_response(request, 401, "INVALID_CREDENTIALS", "用户名或密码错误")
@@ -42,7 +64,15 @@ def create_auth_router(settings: AuthSettings) -> APIRouter:
         token = bearer_token(authorization)
         if token is None:
             return error_response(request, 401, "TOKEN_REQUIRED", "缺少登录凭证")
-        authority.revoke(token)
+        if database is None:
+            authority.revoke(token)
+        else:
+            with database.sessions.begin() as session:
+                SessionAuthority(
+                    settings.session_secret,
+                    settings.session_ttl_seconds,
+                    DatabaseSessionStore(session, request.state.request_id),
+                ).revoke(token)
         return LogoutResponse(revoked=True)
 
     return router
