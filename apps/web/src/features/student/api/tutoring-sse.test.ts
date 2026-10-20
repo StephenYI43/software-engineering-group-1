@@ -60,6 +60,13 @@ describe('SSE 帧与结构校验', () => {
     frame('delta', { ...delta, textDelta: 2 }),
     frame('completed', { ...completed, isComplete: false }),
     frame('stopped', { seq: 3, turnId: 'turn_test_1', isComplete: false, reason: 'other' }),
+    // client_disconnect 是服务端内部状态，不下发；收到即协议违约（#62/96a6304 修订契约）。
+    frame('stopped', {
+      seq: 3,
+      turnId: 'turn_test_1',
+      isComplete: false,
+      reason: 'client_disconnect',
+    }),
     frame('error', {
       seq: 3,
       turnId: 'turn_test_1',

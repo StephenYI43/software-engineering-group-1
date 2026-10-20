@@ -6,7 +6,13 @@ export type TutoringEvent = EventBase &
     | { type: 'started'; stage: TutoringStage; isMock: boolean }
     | { type: 'delta'; textDelta: string }
     | { type: 'completed'; isComplete: true; response: TutoringResponse }
-    | { type: 'stopped'; isComplete: false; reason: 'client_stop' | 'client_disconnect' }
+    /**
+     * `reason` 只有 `client_stop`。#62（96a6304）修订后的契约把 `client_disconnect`
+     * 收进服务端内部状态与日志、**不再作为事件下发**：连接已断，没有接收方。
+     * 因此收到 `client_disconnect` 属于协议违约，按 SseProtocolError 处理，
+     * 不再当成合法的停止原因静默接受。
+     */
+    | { type: 'stopped'; isComplete: false; reason: 'client_stop' }
     | { type: 'error'; isComplete: false; error: ApiErrorBody }
   )
 
@@ -111,9 +117,8 @@ function parseFrame(frame: string): TutoringEvent | null {
       break
     case 'stopped':
       fields = ['isComplete', 'reason']
-      valid =
-        raw.isComplete === false &&
-        (raw.reason === 'client_stop' || raw.reason === 'client_disconnect')
+      // 只接受 client_stop：client_disconnect 是服务端内部状态，下发即协议违约（#62/96a6304）。
+      valid = raw.isComplete === false && raw.reason === 'client_stop'
       break
     case 'error':
       fields = ['isComplete', 'error']
