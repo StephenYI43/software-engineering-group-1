@@ -106,6 +106,26 @@ async function readJsonSafely(response: Response): Promise<unknown> {
   }
 }
 
+/** 同时接受 Headers、键值数组与普通对象，避免展开 Headers 时丢失凭证。 */
+export function requestHeaders(source?: HeadersInit, accept = 'application/json'): Headers {
+  const headers = new Headers(source)
+  headers.set('Accept', accept)
+  return headers
+}
+
+/** JSON 请求和 SSE 的 HTTP 失败使用相同的错误语义。 */
+export async function responseError(response: Response): Promise<ApiError> {
+  const body = parseErrorBody(await readJsonSafely(response))
+  const kind = kindFromStatus(response.status)
+  return new ApiError({
+    kind,
+    status: response.status,
+    message: body?.message ?? FALLBACK_MESSAGE[kind],
+    requestId: body?.requestId,
+    code: body?.code,
+  })
+}
+
 /**
  * 统一的请求入口。所有对外请求都应经过它，以取得一致的错误语义。
  */
@@ -114,7 +134,7 @@ export async function request<T>(input: string, init?: RequestInit): Promise<T> 
   try {
     response = await fetch(input, {
       ...init,
-      headers: { Accept: 'application/json', ...init?.headers },
+      headers: requestHeaders(init?.headers),
     })
   } catch {
     // fetch 抛错 = 请求根本没发出去或连接中断，与服务端返回的错误不同类。
@@ -122,18 +142,17 @@ export async function request<T>(input: string, init?: RequestInit): Promise<T> 
   }
 
   if (response.ok) {
-    return (await readJsonSafely(response)) as T
+    try {
+      return (await response.json()) as T
+    } catch {
+      throw new ApiError({
+        kind: 'server',
+        status: response.status,
+        message: '服务返回了无法识别的数据，请重试',
+        requestId: response.headers.get('X-Request-ID') ?? undefined,
+      })
+    }
   }
 
-  const kind = kindFromStatus(response.status)
-  const body = parseErrorBody(await readJsonSafely(response))
-
-  throw new ApiError({
-    kind,
-    status: response.status,
-    // 契约结构可用时优先用服务端文案；否则用兜底文案。
-    message: body?.message ?? FALLBACK_MESSAGE[kind],
-    requestId: body?.requestId,
-    code: body?.code,
-  })
+  throw await responseError(response)
 }

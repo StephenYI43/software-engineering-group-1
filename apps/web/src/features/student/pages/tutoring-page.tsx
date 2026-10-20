@@ -1,9 +1,12 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
-import { Card, MockDataBadge } from '@pkg/ui'
-import { AsyncContent, useAsyncData } from '../../../app/async-content'
-import { getTutoringTurn } from '../api/tutoring-client'
-import { parseScenario, parseTutoringTurnKind, type MockScenario } from '../mocks'
+import { Button, Card, MockDataBadge } from '@pkg/ui'
+import { ApiError } from '../api/http-client'
+import { createBrowserTutoringClient } from '../api/tutoring-browser-client'
+import type { TutoringClient, TutoringRun, TutoringSnapshot } from '../api/tutoring-client'
+import type { MockScenario } from '../mocks'
 import type { Citation, TutoringResponse, TutoringStage } from '../types'
+import './tutoring-page.css'
 
 /**
  * 教学阶段展示名。
@@ -90,13 +93,8 @@ function Answer({ response }: { response: TutoringResponse }) {
       )}
 
       <Card title="回答">
-        <div className="answer-content" data-testid="answer-content">
-          {response.content
-            .split('\n')
-            .filter((line) => line !== '')
-            .map((line, index) => (
-              <p key={index}>{line}</p>
-            ))}
+        <div className="answer-content tutoring-text" data-testid="answer-content">
+          {response.content}
         </div>
       </Card>
 
@@ -140,15 +138,58 @@ function DemoSwitches({ kind, scenario }: { kind: string; scenario: MockScenario
   )
 }
 
-export function TutoringPage() {
+export function TutoringPage({ client }: { client?: TutoringClient | undefined }) {
   const { sessionId } = useParams<{ sessionId: string }>()
   const location = useLocation()
-  const scenario = parseScenario(location.search)
-  const kind = parseTutoringTurnKind(location.search)
-
-  const state = useAsyncData(`tutoring:${sessionId ?? ''}:${kind}:${scenario}`, () =>
-    getTutoringTurn(kind, scenario),
+  return (
+    <TutoringSession
+      key={`${sessionId ?? ''}:${location.search}`}
+      sessionId={sessionId ?? ''}
+      search={location.search}
+      client={client}
+    />
   )
+}
+
+function TutoringSession({
+  sessionId,
+  search,
+  client: supplied,
+}: {
+  sessionId: string
+  search: string
+  client: TutoringClient | undefined
+}) {
+  const [browser] = useState(() => createBrowserTutoringClient(search))
+  const client = supplied ?? browser.client
+  const isDemo = supplied === undefined && browser.isDemo
+  const [question, setQuestion] = useState('')
+  const [state, setState] = useState<TutoringSnapshot | null>(null)
+  const run = useRef<TutoringRun | null>(null)
+  const active = useRef(false)
+  const previousQuestion = useRef('')
+  const busy = state !== null && ['connecting', 'streaming', 'stopping'].includes(state.status)
+  const parameters = new URLSearchParams(search)
+  const scenario = SCENARIOS.find(([value]) => value === parameters.get('mock'))?.[0] ?? 'normal'
+  const kind = TURN_KINDS.find(([value]) => value === parameters.get('turn'))?.[0] ?? 'thought'
+
+  useEffect(
+    () => () => {
+      run.current?.cancel()
+    },
+    [],
+  )
+
+  function start(content: string) {
+    if (active.current) return
+    active.current = true
+    previousQuestion.current = content
+    const current = client.start(sessionId, { content }, setState)
+    run.current = current
+    void current.done.then(() => {
+      if (run.current === current) active.current = false
+    })
+  }
 
   return (
     <div>
@@ -156,9 +197,94 @@ export function TutoringPage() {
         <Link to="/courses">← 返回课程列表</Link>
       </p>
       <h1>答疑</h1>
-      <MockDataBadge source="取自 tutoring 契约样例" />
-      <DemoSwitches kind={kind} scenario={scenario} />
-      <AsyncContent state={state}>{(response) => <Answer response={response} />}</AsyncContent>
+      {isDemo && (
+        <>
+          <MockDataBadge source="合成 SSE 流，取自 tutoring 契约样例" />
+          <DemoSwitches kind={kind} scenario={scenario} />
+        </>
+      )}
+      <form
+        className="tutoring-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (question.trim()) start(question)
+        }}
+      >
+        <label htmlFor="tutoring-question">问题</label>
+        <textarea
+          id="tutoring-question"
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          maxLength={2000}
+          required
+          disabled={busy}
+        />
+        <div className="tutoring-actions">
+          <Button type="submit" disabled={busy || !question.trim()}>
+            发送
+          </Button>
+          {busy && (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={state?.turnId === null || state?.status === 'stopping'}
+              onClick={() => {
+                void run.current?.stop()
+              }}
+            >
+              停止
+            </Button>
+          )}
+          {state !== null && !busy && !state.isComplete && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => start(previousQuestion.current)}
+            >
+              重试本轮
+            </Button>
+          )}
+        </div>
+      </form>
+      {state?.isComplete && state.response !== null ? (
+        <Answer response={state.response} />
+      ) : (
+        state !== null && (
+          <>
+            {state.stage !== null && <StageIndicator stage={state.stage} />}
+            {state.isMock === true && (
+              <p className="runtime-source" data-testid="runtime-source">
+                本轮回答由离线假模型生成（isMock = true）
+              </p>
+            )}
+            {state.content !== '' && (
+              <Card title="回答（未完成）">
+                <div className="tutoring-text" data-testid="partial-answer">
+                  {state.content}
+                </div>
+              </Card>
+            )}
+            {state.status === 'stopped' && <p role="status">已停止，本轮未完成。可以重新提问。</p>}
+            {busy && (
+              <p role="status">
+                {state.status === 'connecting'
+                  ? '正在连接…'
+                  : state.status === 'stopping'
+                    ? '正在等待停止确认…'
+                    : '正在生成，本轮尚未完成…'}
+              </p>
+            )}
+            {state.error !== null && (
+              <div role="alert">
+                <p>{state.error.message}</p>
+                {state.error instanceof ApiError && state.error.requestId !== undefined && (
+                  <p>问题编号：{state.error.requestId}</p>
+                )}
+              </div>
+            )}
+          </>
+        )
+      )}
     </div>
   )
 }

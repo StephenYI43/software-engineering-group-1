@@ -18,14 +18,17 @@ afterEach(() => {
 
 describe('request', () => {
   it('成功时返回解析后的响应体', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true }, 200)))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof globalThis.fetch>().mockResolvedValue(jsonResponse({ ok: true }, 200)),
+    )
     await expect(request<{ ok: boolean }>('/api/v1/x')).resolves.toEqual({ ok: true })
   })
 
   it('错误体符合契约结构时，采用服务端文案与 requestId', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
+      vi.fn<typeof globalThis.fetch>().mockResolvedValue(
         jsonResponse(
           {
             code: 'COURSE_NOT_FOUND',
@@ -52,7 +55,9 @@ describe('request', () => {
     // 平台的统一错误封装尚未实现，代理/网关返回 HTML 是预期内的情况。
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(textResponse('<html><body>502 Bad Gateway</body></html>', 502)),
+      vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValue(textResponse('<html><body>502 Bad Gateway</body></html>', 502)),
     )
 
     const error = (await request('/api/v1/courses').catch((e: unknown) => e)) as ApiError
@@ -69,7 +74,9 @@ describe('request', () => {
   it('缺少 requestId 的错误体视为不符合契约结构', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(jsonResponse({ code: 'X', message: '服务端消息' }, 404)),
+      vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValue(jsonResponse({ code: 'X', message: '服务端消息' }, 404)),
     )
 
     const error = (await request('/api/v1/x').catch((e: unknown) => e)) as ApiError
@@ -89,14 +96,20 @@ describe('request', () => {
     ]
 
     for (const [status, kind] of cases) {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(textResponse('nope', status)))
+      vi.stubGlobal(
+        'fetch',
+        vi.fn<typeof globalThis.fetch>().mockResolvedValue(textResponse('nope', status)),
+      )
       const error = (await request('/api/v1/x').catch((e: unknown) => e)) as ApiError
       expect(error.kind).toBe(kind)
     }
   })
 
   it('404 的兜底文案统一是「未找到」，不含「无权限」这类区分性措辞', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(textResponse('missing', 404)))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof globalThis.fetch>().mockResolvedValue(textResponse('missing', 404)),
+    )
     const error = (await request('/api/v1/x').catch((e: unknown) => e)) as ApiError
     // 防枚举：不得让用户从文案推断出「资源存在但无权访问」
     expect(error.message).toBe('未找到')
@@ -104,9 +117,47 @@ describe('request', () => {
   })
 
   it('请求未发出时归类为 network，status 为 null', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof globalThis.fetch>().mockRejectedValue(new TypeError('Failed to fetch')),
+    )
     const error = (await request('/api/v1/x').catch((e: unknown) => e)) as ApiError
     expect(error.kind).toBe('network')
     expect(error.status).toBeNull()
+  })
+})
+
+describe('请求协议边界', () => {
+  it.each([
+    new Headers({ Authorization: 'Bearer synthetic-only' }),
+    [['Authorization', 'Bearer synthetic-only']] as [string, string][],
+    { Authorization: 'Bearer synthetic-only' },
+  ])('保留每种 HeadersInit 的凭证', async (headers) => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValue(jsonResponse({ ok: true }, 200))
+    vi.stubGlobal('fetch', fetch)
+    await request('/api/v1/x', { headers })
+    const sent = new Headers(fetch.mock.calls[0]?.[1]?.headers)
+    expect(sent.get('Authorization')).toBe('Bearer synthetic-only')
+    expect(sent.get('Accept')).toBe('application/json')
+  })
+
+  it('拒绝 200 的非 JSON，保留服务端响应头 requestId', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+        new Response('<html>bad</html>', {
+          status: 200,
+          headers: { 'X-Request-ID': 'req_synthetic_only' },
+        }),
+      ),
+    )
+    await expect(request('/api/v1/x')).rejects.toMatchObject({
+      name: 'ApiError',
+      kind: 'server',
+      status: 200,
+      requestId: 'req_synthetic_only',
+    })
   })
 })
