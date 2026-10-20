@@ -139,34 +139,38 @@ function parseFrame(frame: string): TutoringEvent | null {
 export function createSseDecoder() {
   const decoder = new TextDecoder('utf-8', { fatal: true })
   let buffer = ''
-  function drain(): TutoringEvent[] {
+  function drain(onEvent?: (event: TutoringEvent) => void): TutoringEvent[] {
     const events: TutoringEvent[] = []
     let boundary: RegExpExecArray | null
     while ((boundary = /\r?\n\r?\n/.exec(buffer)) !== null) {
       if (boundary.index > 1_048_576) throw new SseProtocolError('答疑流单帧过大，本轮未完成')
       const event = parseFrame(buffer.slice(0, boundary.index))
       buffer = buffer.slice(boundary.index + boundary[0].length)
-      if (event !== null) events.push(event)
+      if (event !== null) {
+        // 有效前缀立即交付；同一网络 chunk 后续坏帧不能抹掉此前正文。
+        onEvent?.(event)
+        events.push(event)
+      }
     }
     if (buffer.length > 1_048_576) throw new SseProtocolError('答疑流单帧过大，本轮未完成')
     return events
   }
   return {
-    push(chunk: Uint8Array): TutoringEvent[] {
+    push(chunk: Uint8Array, onEvent?: (event: TutoringEvent) => void): TutoringEvent[] {
       try {
         buffer += decoder.decode(chunk, { stream: true })
       } catch {
         throw new SseProtocolError()
       }
-      return drain()
+      return drain(onEvent)
     },
-    finish(): TutoringEvent[] {
+    finish(onEvent?: (event: TutoringEvent) => void): TutoringEvent[] {
       try {
         buffer += decoder.decode()
       } catch {
         throw new SseProtocolError()
       }
-      const events = drain()
+      const events = drain(onEvent)
       if (buffer.trim() !== '') throw new SseProtocolError('答疑流提前结束，本轮未完成')
       return events
     },

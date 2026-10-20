@@ -46,6 +46,7 @@ export function createTutoringClient(options: ClientOptions = {}) {
       onChange: (state: TutoringSnapshot) => void,
     ): TutoringRun {
       const controller = new AbortController()
+      const stopController = new AbortController()
       const path = `/api/v1/tutoring/sessions/${encodeURIComponent(sessionId)}`
       let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
       let state: TutoringSnapshot = {
@@ -62,6 +63,7 @@ export function createTutoringClient(options: ClientOptions = {}) {
       let terminal: TutoringEvent | undefined
       let stopRequest: Promise<void> | undefined
       let stopTimer: ReturnType<typeof setTimeout> | undefined
+      let terminalTimer: ReturnType<typeof setTimeout> | undefined
       let resolveDone: (value: TutoringSnapshot) => void = () => {}
       const done = new Promise<TutoringSnapshot>((resolve) => {
         resolveDone = resolve
@@ -75,8 +77,12 @@ export function createTutoringClient(options: ClientOptions = {}) {
         state = next
         settled = true
         clearTimeout(stopTimer)
-        if (notify) onChange(next)
+        clearTimeout(terminalTimer)
+        clearTimeout(connectTimer)
+        // 停止请求拥有独立生命周期，收尾时不误 abort 已正常读完的 SSE。
+        stopController.abort()
         resolveDone(next)
+        if (notify) onChange(next)
       }
       const disconnect = () => {
         controller.abort()
@@ -85,6 +91,18 @@ export function createTutoringClient(options: ClientOptions = {}) {
         })
       }
       publish(state)
+      const connectTimer = setTimeout(() => {
+        finish({
+          ...state,
+          status: 'error',
+          error: new ApiError({
+            kind: 'network',
+            status: null,
+            message: '连接超时，本轮未完成，请重试',
+          }),
+        })
+        disconnect()
+      }, 30000)
 
       async function execute() {
         try {
@@ -131,7 +149,8 @@ export function createTutoringClient(options: ClientOptions = {}) {
           const protocol = createTutoringProtocol(sessionId)
           const accept = (event: TutoringEvent) => {
             protocol.accept(event)
-            if (event.type === 'started')
+            if (event.type === 'started') {
+              clearTimeout(connectTimer)
               publish({
                 ...state,
                 status: 'streaming',
@@ -139,20 +158,30 @@ export function createTutoringClient(options: ClientOptions = {}) {
                 stage: event.stage,
                 isMock: event.isMock,
               })
-            else if (event.type === 'delta')
+            } else if (event.type === 'delta')
               publish({ ...state, content: state.content + event.textDelta })
             else {
               terminal = event
               clearTimeout(stopTimer)
+              terminalTimer = setTimeout(() => {
+                finish({
+                  ...state,
+                  status: 'error',
+                  response: null,
+                  isComplete: false,
+                  error: new SseProtocolError('答疑流未按约定结束，本轮未完成，请重试'),
+                })
+                disconnect()
+              }, 5000)
             }
           }
           while (!settled) {
             const chunk = await reader.read()
             if (settled) return
             if (chunk.done) break
-            for (const event of decoder.push(chunk.value)) accept(event)
+            decoder.push(chunk.value, accept)
           }
-          for (const event of decoder.finish()) accept(event)
+          decoder.finish(accept)
           protocol.finish()
           // 完成态等 EOF 验证后发布，避免多终帧/尾部垃圾曾触发完整回答 UI。
           if (terminal?.type === 'completed')
@@ -203,14 +232,14 @@ export function createTutoringClient(options: ClientOptions = {}) {
             })
             disconnect()
           }, 5000)
-          stopRequest = (async () => {
+          const sendStop = (async () => {
             try {
               const headers = requestHeaders(await options.getHeaders?.())
               if (settled || terminal !== undefined) return
               const response = await fetch(`${path}/turns/${encodeURIComponent(turnId)}/stop`, {
                 method: 'POST',
                 headers,
-                signal: controller.signal,
+                signal: stopController.signal,
               })
               if (!response.ok) throw await responseError(response)
               // 兼容旧 200 与已裁定的 204；只认 SSE 终帧，不解析内部状态枚举。
@@ -219,6 +248,7 @@ export function createTutoringClient(options: ClientOptions = {}) {
                 publish({ ...state, error: networkError(error) })
             }
           })()
+          stopRequest = Promise.race([sendStop, done.then(() => undefined)])
           return stopRequest
         },
         cancel(): void {

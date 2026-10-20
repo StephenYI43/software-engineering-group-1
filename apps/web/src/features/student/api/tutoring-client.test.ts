@@ -190,6 +190,90 @@ describe('SSE 网络客户端', () => {
 })
 
 describe('停止与连接生命周期', () => {
+  it.each(['headers', 'started'])('等待 %s 不会永久卡住', async (waiting) => {
+    vi.useFakeTimers()
+    const source = controlledResponse()
+    const fetch: typeof globalThis.fetch = () =>
+      waiting === 'headers' ? new Promise<Response>(() => {}) : Promise.resolve(source.response)
+    const run = createTutoringClient({ fetch }).start('session_test', { content: '问题' }, () => {})
+    let result: TutoringSnapshot | undefined
+    void run.done.then((value) => {
+      result = value
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(30000)
+      expect(result).toMatchObject({ status: 'error', isComplete: false })
+      expect(result?.error?.message).toContain('连接超时')
+    } finally {
+      run.cancel()
+    }
+  })
+
+  it.each(['completed', 'stopped'])('终帧 %s 后连接不关闭也会有界结算', async (type) => {
+    vi.useFakeTimers()
+    const source = controlledResponse()
+    const run = createTutoringClient({ fetch: () => Promise.resolve(source.response) }).start(
+      'session_test',
+      { content: '问题' },
+      () => {},
+    )
+    let result: TutoringSnapshot | undefined
+    void run.done.then((value) => {
+      result = value
+    })
+    source.send('started', started)
+    source.send(
+      type,
+      type === 'completed'
+        ? { ...completed, seq: 2 }
+        : { seq: 2, turnId: 'turn_test_1', isComplete: false, reason: 'client_stop' },
+    )
+    try {
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(result).toMatchObject({ status: 'error', response: null, isComplete: false })
+      expect(source.cancelled).toBe(true)
+    } finally {
+      run.cancel()
+    }
+  })
+
+  it('终帧确认后取消尚未返回的 stop HTTP，并结算 stop Promise', async () => {
+    vi.useFakeTimers()
+    const source = controlledResponse()
+    let stopSignal: AbortSignal | null | undefined
+    const fetch: typeof globalThis.fetch = (input, init) => {
+      if (typeof input !== 'string' || !input.endsWith('/stop'))
+        return Promise.resolve(source.response)
+      stopSignal = init?.signal
+      return new Promise<Response>((_resolve, reject) => {
+        stopSignal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        )
+      })
+    }
+    const run = createTutoringClient({ fetch }).start('session_test', { content: '问题' }, () => {})
+    source.send('started', started)
+    await vi.advanceTimersByTimeAsync(0)
+    let stopped = false
+    void run.stop().then(() => {
+      stopped = true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    source.send('stopped', {
+      seq: 2,
+      turnId: 'turn_test_1',
+      isComplete: false,
+      reason: 'client_stop',
+    })
+    source.close()
+    expect(await run.done).toMatchObject({ status: 'stopped' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(stopSignal?.aborted).toBe(true)
+    expect(stopped).toBe(true)
+  })
+
   it('停止调用端点但保持连接；重复停止不重复发送，正常 stopped 清除兜底', async () => {
     vi.useFakeTimers()
     const source = controlledResponse()
@@ -283,5 +367,27 @@ describe('停止与连接生命周期', () => {
     expect(await run.done).toMatchObject({ status: 'error', isComplete: false })
     expect(source.cancelled).toBe(true)
     expect(changes).toHaveLength(count)
+  })
+})
+
+describe('字节分块不改变已接收正文', () => {
+  it('同一 chunk 末尾损坏的帧不抹掉前面已校验的 delta', async () => {
+    const fetch: typeof globalThis.fetch = () =>
+      Promise.resolve(
+        streamResponse([
+          frame('started', started) + frame('delta', delta) + 'event: delta\ndata: bad-json\n\n',
+        ]),
+      )
+    const result = await createTutoringClient({ fetch }).start(
+      'session_test',
+      { content: '问题' },
+      () => {},
+    ).done
+    expect(result).toMatchObject({
+      status: 'error',
+      turnId: 'turn_test_1',
+      content: '临时正文',
+      isComplete: false,
+    })
   })
 })
