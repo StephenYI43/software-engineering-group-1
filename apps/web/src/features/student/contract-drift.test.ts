@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { TutoringAction, TutoringEmotion } from './types'
 
 /**
@@ -45,32 +45,32 @@ function parseValuesAfterHeading(markdown: string, heading: string): string[] {
 }
 
 /** 源码里定义的联合类型，作为「前端实际接受的取值集合」。 */
-const EMOTIONS_IN_CODE: readonly TutoringEmotion[] = [
+const EMOTIONS_IN_CODE = [
   'neutral',
   'encouraging',
   'thinking',
   'celebrating',
-]
+] as const satisfies readonly TutoringEmotion[]
 
-const ACTIONS_IN_CODE: readonly TutoringAction[] = ['idle', 'nod', 'point', 'write']
-
-/** 编译期守卫：上面的清单必须与 `./types.ts` 的联合类型完全一致。 */
-const EMOTIONS_IN_CODE_SATISFIES: readonly TutoringEmotion[] = EMOTIONS_IN_CODE
-const ACTIONS_IN_CODE_SATISFIES: readonly TutoringAction[] = ACTIONS_IN_CODE
+const ACTIONS_IN_CODE = [
+  'idle',
+  'nod',
+  'point',
+  'write',
+] as const satisfies readonly TutoringAction[]
 
 describe('数字人枚举契约漂移守卫', () => {
   const contract = readFileSync(CONTRACT_PATH, 'utf8')
 
   it('AvatarEmotion 集值与前端 TutoringEmotion 一致', () => {
-    expect(parseValuesAfterHeading(contract, '### AvatarEmotion')).toEqual([
-      ...EMOTIONS_IN_CODE_SATISFIES,
-    ])
+    // satisfies 拒绝清单中的非法值；双向相等检查同时拒绝类型中未列出的新增值。
+    expectTypeOf<TutoringEmotion>().toEqualTypeOf<(typeof EMOTIONS_IN_CODE)[number]>()
+    expect(parseValuesAfterHeading(contract, '### AvatarEmotion')).toEqual([...EMOTIONS_IN_CODE])
   })
 
   it('AvatarAction 集值与前端 TutoringAction 一致', () => {
-    expect(parseValuesAfterHeading(contract, '### AvatarAction')).toEqual([
-      ...ACTIONS_IN_CODE_SATISFIES,
-    ])
+    expectTypeOf<TutoringAction>().toEqualTypeOf<(typeof ACTIONS_IN_CODE)[number]>()
+    expect(parseValuesAfterHeading(contract, '### AvatarAction')).toEqual([...ACTIONS_IN_CODE])
   })
 
   it('两组集值都是非空且互不重复（解析失败会立刻暴露）', () => {
