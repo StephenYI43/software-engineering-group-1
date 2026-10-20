@@ -170,7 +170,7 @@ started  →  delta × N  →  completed        （正常完成）
 
 ### 为什么停止不能靠 `AbortController` 实现
 
-`reason` 的取值 `client_stop` 与 `client_disconnect` 区分的是**用户意图**与**连接断开**。
+服务端在内部区分 `client_stop` 与 `client_disconnect`：前者是**用户意图**，后者是**连接断开**；后者不会作为 `reason` 下发。
 前端若用 `AbortController.abort()` 实现停止按钮，服务端观察到的是连接断开，
 会被记为内部状态 `disconnected`（不产生事件），而不是用户意图的 `client_stop`，语义丢失。
 
