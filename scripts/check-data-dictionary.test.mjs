@@ -72,7 +72,9 @@ function run(root, args = []) {
   const result = spawnSync(process.execPath, [SCRIPT, '--root', root, ...args], {
     encoding: 'utf8',
   })
-  return { status: result.status, output: `${result.stdout}${result.stderr}` }
+  const output = `${result.stdout}${result.stderr}`
+  assert.doesNotMatch(output, /(?:^|\n)(?:ReferenceError|TypeError|SyntaxError):/)
+  return { status: result.status, output }
 }
 
 function withRepo(files, callback) {
@@ -560,5 +562,209 @@ test('未知参数按用法错误处理', () => {
     const { status, output } = run(root, ['--verbose'])
     assert.equal(status, 2, output)
     assert.match(output, /未知参数/)
+  })
+})
+
+/* ------------------------------------------------------- 本轮审计漏检回归 */
+
+for (const [label, value] of [
+  ['大小写不同的字符串', "'ACTIVE'"],
+  ['带 PostgreSQL 类型转换的字符串', "'archived'::text"],
+]) {
+  test(`${label}默认值不能绕过枚举检查`, () => {
+    const row = `| status | 状态 | varchar(16) | 否 | ${value} | CHECK IN('active','disabled') | 无（非键） |`
+    withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 1, output)
+      assert.match(output, /字段 status 的默认值.*不在取值范围/)
+    })
+  })
+}
+
+test('数字默认值必须属于数字枚举', () => {
+  const row = '| mode | 模式 | integer | 否 | 2 | CHECK IN(0,1) | 无（非键） |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /字段 mode 的默认值.*不在取值范围/)
+  })
+})
+
+test('不能解析的默认值表达式明确标记未验证', () => {
+  const row =
+    '| status | 状态 | varchar(16) | 否 | make_status() | CHECK IN(active,disabled) | 无（非键） |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+    assert.match(output, /字段 status.*未验证/)
+    assert.match(output, /1 项未验证/)
+  })
+})
+
+for (const [value, allowed] of [
+  ["'Active'::text", "'Active','Disabled'"],
+  ['1', '0,1'],
+  ['1.00', '0,1.0'],
+  ['true', 'true,false'],
+]) {
+  test(`合法默认值 ${value} 与枚举正确对账`, () => {
+    const row = `| mode | 模式 | varchar(16) | 否 | ${value} | CHECK IN(${allowed}) | 无（非键） |`
+    withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 0, output)
+      assert.match(output, /0 项未验证/)
+    })
+  })
+}
+
+test('一张有效表不能掩盖另一张表的缺列表头', () => {
+  const bad = buildDoc({ title: 'other_items' }).replace(' | PK/FK/关联与删除/更新规则 |', ' |')
+  withRepo({ 'student.md': `${buildDoc({})}\n${bad}` }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /\[other_items\].*表头.*7/)
+  })
+})
+
+test('只有表头没有字段行的字典表不通过', () => {
+  withRepo({ 'student.md': buildDoc({ rows: [] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /\[items\].*没有字段行/)
+  })
+})
+
+for (const label of ['用途', '状态']) {
+  test(`表级${label}只有标签、内容为空时不通过`, () => {
+    const meta = META_BULLETS.replace(new RegExp(`- ${label}：[^\\n]+`), `- ${label}：`)
+    withRepo({ 'student.md': buildDoc({ meta }) }, (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 1, output)
+      assert.match(output, new RegExp(`表缺少「${label === '状态' ? '实现状态' : label}」信息`))
+    })
+  })
+}
+
+test('owner 标签为空不算标注负责人', () => {
+  withRepo({ 'student.md': buildDoc({ owner: '' }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /owner/)
+  })
+})
+
+function completeFiles() {
+  const modules = [
+    ['platform.md', 'users'],
+    ['student.md', 'student_maps'],
+    ['tutoring-knowledge.md', 'tutoring_sessions'],
+    ['avatar-media.md', 'avatar_profiles'],
+    ['learning.md', 'courses'],
+    ['analytics-admin.md', 'analytics_daily_metrics'],
+  ]
+  return Object.fromEntries([
+    ['README.md', '# 总览\n'],
+    ['erd.md', '# ER\n'],
+    ['acceptance.md', '# 验收\n'],
+    ...modules.map(([file, title]) => [file, buildDoc({ title })]),
+  ])
+}
+
+for (const name of ['README.md', 'erd.md', 'acceptance.md']) {
+  test(`全量模式拒绝空的公共文件 ${name}`, () => {
+    withRepo({ ...completeFiles(), [name]: ' \n' }, (root) => {
+      const { status, output } = run(root)
+      assert.equal(status, 1, output)
+      assert.match(output, /文件为空/)
+      assert.ok(output.includes(`docs/data-model/${name}`), output)
+    })
+  })
+}
+
+for (const reference of [
+  'reminders.*',
+  'courses.id / ghost_column',
+  'ghost_column / courses.id',
+  'courses.(id,ghost_column)',
+]) {
+  test(`映射引用 ${reference} 不能在全量检查中静默跳过`, () => {
+    const mapping = `# 映射\nowner：M2\n本文件不登记新表。\n\n## 映射\n| JSON字段 | 领域表.列 | 来源 |\n| --- | --- | --- |\n| x | ${reference} | 未实现 |\n`
+    withRepo({ ...completeFiles(), 'student.md': mapping }, (root) => {
+      const { status, output } = run(root)
+      assert.equal(status, 1, output)
+      assert.match(output, /映射.*(?:通配符|完整的 表\.字段)/)
+    })
+  })
+}
+
+for (const [value, allowed] of [
+  ["'1'::integer", '0,1'],
+  ['1.1::numeric(2,0)', '1.1,2'],
+]) {
+  test(`无法证明保值的类型转换 ${value} 留待核验`, () => {
+    const row = `| mode | 模式 | numeric | 否 | ${value} | CHECK IN(${allowed}) | 无（非键） |`
+    withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 0, output)
+      assert.match(output, /字段 mode.*未验证/)
+      assert.match(output, /1 项未验证/)
+    })
+  })
+}
+for (const constraint of [
+  "CHECK (status NOT IN('active','disabled'))",
+  "CHECK (status IN('active','disabled') AND status <> 'active')",
+  "CHECK (status IN('active','disabled') OR status = 'other')",
+]) {
+  test(`不能把局部 IN 当作完整约束：${constraint}`, () => {
+    const row = `| status | 状态 | varchar(16) | 否 | active | ${constraint} | 无（非键） |`
+    withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 0, output)
+      assert.match(output, /字段 status.*未验证/)
+    })
+  })
+}
+test('简单带字段名的 SQL CHECK 可以核验', () => {
+  const row =
+    "| status | 状态 | varchar(16) | 否 | archived | CHECK (status IN('active','disabled')) | 无（非键） |"
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /字段 status.*不在取值范围/)
+  })
+})
+test('只有 Markdown 装饰的元数据仍视为空', () => {
+  const meta = META_BULLETS.replace('索引：status 普通索引。', '索引：** **')
+  withRepo({ 'student.md': buildDoc({ owner: '** **', meta }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /未标注 owner/)
+    assert.match(output, /表缺少「索引」/)
+  })
+})
+
+test('业务/管理分组下三级实体标题按真实表名登记并解析内部 FK', () => {
+  const first = buildDoc({ title: 'items' }).replace('## items', '## 业务表\n\n### items')
+  const second = buildDoc({
+    title: 'item_links',
+    rows: [ID_ROW, '| item_id | 关联 | varchar(64) | 否 | 无 | 无 | FK→items.id |'],
+  }).replace('## item_links', '## 管理表\n\n### item_links')
+  withRepo({ 'student.md': first + second }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+    assert.match(output, /已登记 2 张表/)
+    assert.doesNotMatch(output, /悬空 FK|重复登记/)
+  })
+})
+test('JSONB 三级标题仍是内部属性，不能登记成实体表或跳过属性校验', () => {
+  const doc = buildJsonbDoc({
+    attrRows: ['| payload.schemaVersion | 版本 | | 否 | 1.0 | 固定 | 无 |'],
+  }).replace('## JSONB内部字典', '## JSONB内部字典\n\n### items.payload')
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 属性 payload.schemaVersion 的第 3 列/)
+    assert.match(output, /已登记 1 张表/)
   })
 })

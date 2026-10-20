@@ -67,15 +67,6 @@ const NO_TABLE_DECLARATION = /本文件不登记新表/
 /** FK 单元格里出现「无物理FK」表示故意不建外键，不当作缺项。 */
 const NO_FK_PATTERN = /无物理\s*FK/i
 
-/** 枚举单元格的 IN(...) 写法。 */
-const CHECK_IN_PATTERN = /IN\s*\(([^)]*)\)/i
-
-/** 默认值被判为「字面量枚举值」的形态：小写标识符，不含空格与中文。 */
-const LITERAL_PATTERN = /^[a-z][a-z0-9_]*$/
-
-/** 不算枚举值的内建默认。 */
-const BUILTIN_DEFAULTS = new Set(['null', 'true', 'false', 'current_timestamp', 'now'])
-
 /** 表名/列名引用：table.column。 */
 const REFERENCE_PATTERN = /([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)/g
 
@@ -84,9 +75,13 @@ const TABLE_INFO = [
   { key: '用途', label: '用途', pattern: /用途\s*[：:]/ },
   { key: '状态', label: '实现状态', pattern: /状态\s*[：:]/ },
   { key: '归类', label: '业务/管理归类', pattern: /业务|管理/ },
-  { key: '索引', label: '索引', pattern: /索引/ },
-  { key: '权限', label: '读写权限', pattern: /读写|权限|授权/ },
-  { key: '保留', label: '保留策略', pattern: /保留/ },
+  { key: '索引', label: '索引', pattern: /索引[^：:\n；;]*[：:][ \t]*[^ \t\n；;]/ },
+  {
+    key: '权限',
+    label: '读写权限',
+    pattern: /(?:读写|权限|授权)[^：:\n；;]*[：:][ \t]*[^ \t\n；;]/,
+  },
+  { key: '保留', label: '保留策略', pattern: /保留[^：:\n；;]*[：:][ \t]*[^ \t\n；;]/ },
 ]
 
 class Report {
@@ -114,11 +109,6 @@ function clean(cell) {
   return (cell ?? '').replace(/`/g, '').replace(/\*\*/g, '').trim()
 }
 
-/** 去掉 SQL 风格引号，让 `'active'` 与 active 被当作同一个枚举值。 */
-function unquote(value) {
-  return value.replace(/^(['"`])(.*)\1$/, '$2').trim()
-}
-
 /** 拆一行表格为单元格。行首行尾的管道不算单元格。 */
 function splitRow(line) {
   const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
@@ -130,15 +120,21 @@ function isSeparator(line) {
   return /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes('-')
 }
 
-/** 把文档拆成「## 标题 + 行」的小节，保留行号用于定位。 */
+/** 按二/三级标题拆节；保留二级父标题以识别 JSONB 属性区。 */
 function splitSections(text) {
   const lines = text.split(/\r?\n/)
   const sections = [{ title: null, line: 1, entries: [] }]
   let current = sections[0]
+  let parentTitle = null
   lines.forEach((raw, index) => {
     const line = index + 1
-    if (/^##\s+/.test(raw)) {
-      current = { title: raw.replace(/^##\s+/, '').trim(), line, entries: [] }
+    const heading = /^(#{2,3})\s+(.+)$/.exec(raw)
+    if (heading) {
+      if (heading[1].length === 2) parentTitle = null
+      else if (current.parentTitle === undefined || current.parentTitle === null) {
+        parentTitle = current.title
+      }
+      current = { title: clean(heading[2]), parentTitle, line, entries: [] }
       sections.push(current)
       return
     }
@@ -242,18 +238,27 @@ function parseDoc(name, text) {
     file: `docs/data-model/${name}`,
     text,
     tables: [],
+    invalidTables: [],
     mappings: [],
     jsonbSection: null,
   }
   for (const section of splitSections(text)) {
     if (section.title === null) continue
-    if (/JSONB/i.test(section.title)) {
-      doc.jsonbSection = { section, tables: findTables(section) }
+    if (/JSONB/i.test(section.title) || /JSONB/i.test(section.parentTitle ?? '')) {
+      doc.jsonbSection ??= { section, tables: [] }
+      doc.jsonbSection.tables.push(...findTables(section))
       continue
     }
     for (const table of findTables(section)) {
       if (isDictionaryHeader(table.header)) {
         doc.tables.push({ section, table, name: section.title })
+        continue
+      }
+      const dictionaryColumns = table.header.filter((cell) =>
+        SEVEN_HEADERS.some((prefix) => cell.startsWith(prefix)),
+      ).length
+      if (dictionaryColumns >= 2 || table.header[0]?.startsWith('物理字段名')) {
+        doc.invalidTables.push({ section, table })
         continue
       }
       const column = mappingColumnIndex(table.header)
@@ -291,11 +296,13 @@ function buildRegistry(docs, report) {
 /** 表级信息：用途/状态/归类/索引/权限/保留。只查存在性。 */
 function checkTableInfo(doc, section, table, report) {
   const meta = sectionMeta(section, table.line)
-  const preamble = sectionPreamble(section, table.line)
+  const preamble = clean(sectionPreamble(section, table.line))
 
   for (const item of TABLE_INFO) {
     const present =
-      item.key === '用途' || item.key === '状态' ? meta.has(item.key) : item.pattern.test(preamble)
+      item.key === '用途' || item.key === '状态'
+        ? Boolean(meta.get(item.key)?.trim())
+        : item.pattern.test(preamble)
     if (!present) {
       report.error(doc.file, table.line, section.title, `表缺少「${item.label}」信息`)
     }
@@ -331,34 +338,62 @@ function checkNullable(doc, tableName, field, line, nullableCell, keyCell, repor
   }
 }
 
+/** 仅解析可精确比较的字面量，不执行 SQL；其余表达式交人工核验。 */
+function parseLiteral(raw) {
+  let value = clean(raw)
+  // 只接受字符串到 text 的保值转换，其他 cast 的舍入/类型语义交人工核验。
+  const textCast = /^('(?:[^']|'')*')\s*::\s*text$/i.exec(value)
+  if (textCast) value = textCast[1]
+  const quoted = /^'((?:[^']|'')*)'$/.exec(value) ?? /^"((?:[^"]|"")*)"$/.exec(value)
+  if (quoted) return { kind: 'string', value: quoted[1].replace(/''/g, "'").replace(/""/g, '"') }
+  if (/^null$/i.test(value)) return { kind: 'null', value: 'null' }
+  if (/^(true|false)$/i.test(value)) return { kind: 'boolean', value: value.toLowerCase() }
+  if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) {
+    const negative = value.startsWith('-')
+    const [integer, fraction = ''] = value.replace(/^[+-]/, '').split('.')
+    const whole = BigInt(integer || '0').toString()
+    const decimal = fraction.replace(/0+$/, '')
+    const sign = negative && (whole !== '0' || decimal !== '') ? '-' : ''
+    return { kind: 'number', value: `${sign}${whole}${decimal ? `.${decimal}` : ''}` }
+  }
+  if (/^[a-z_][a-z0-9_]*$/i.test(value)) return { kind: 'string', value }
+  return null
+}
+
 /** 默认值 vs 枚举/CHECK：能对账就对账，对不了账标「未验证」，不默认为通过。 */
 function checkDefaultAgainstEnum(doc, tableName, field, line, defaultCell, valuesCell, report) {
-  const literal = unquote(defaultCell)
-  if (!LITERAL_PATTERN.test(literal)) return
-
-  const inMatch = CHECK_IN_PATTERN.exec(valuesCell)
-  if (inMatch) {
-    const allowed = inMatch[1]
-      .split(',')
-      .map((item) => unquote(clean(item)).toLowerCase())
-      .filter(Boolean)
-    const value = literal.toLowerCase()
-    if (!allowed.includes(value) && !BUILTIN_DEFAULTS.has(value)) {
-      report.error(
-        doc.file,
-        line,
-        tableName,
-        `字段 ${field} 的默认值「${literal}」不在取值范围 ${allowed.join('/')} 内`,
-      )
-    }
-    return
+  if (!/\b(?:IN|CHECK)\b/i.test(valuesCell)) return
+  let expression = clean(valuesCell)
+    .replace(/^CHECK\s*/i, '')
+    .trim()
+  if (expression.startsWith('(') && expression.endsWith(')')) {
+    expression = expression.slice(1, -1).trim()
   }
-  if (/CHECK/i.test(valuesCell)) {
+  // 必须匹配整个简单约束，不能拿 NOT IN 或复合 CHECK 的片段冒充核验。
+  const inMatch = /^(?:([a-z_][a-z0-9_]*)\s+)?IN\s*\(([^()]*)\)$/i.exec(expression)
+  if (/^(无|缺省)(?:$|[；;，,（(])/.test(defaultCell)) return
+  const literal = parseLiteral(defaultCell)
+  const allowed =
+    inMatch && (!inMatch[1] || inMatch[1] === field)
+      ? inMatch[2].split(/,(?=(?:[^']*'[^']*')*[^']*$)/).map(parseLiteral)
+      : null
+  if (!literal || !allowed || allowed.some((item) => item === null)) {
     report.todo(
       doc.file,
       line,
       tableName,
-      `字段 ${field} 的默认值「${literal}」无法与取值范围表达式对账（未验证）`,
+      `字段 ${field} 的默认值「${defaultCell}」无法与取值范围表达式对账（未验证）`,
+    )
+    return
+  }
+  // SQL CHECK 对 NULL 的结果为 unknown，不因 IN 列表没有 NULL 就判错。
+  if (literal.kind === 'null') return
+  if (!allowed.some((item) => item.kind === literal.kind && item.value === literal.value)) {
+    report.error(
+      doc.file,
+      line,
+      tableName,
+      `字段 ${field} 的默认值「${literal.value}」不在取值范围 ${allowed.map((item) => item.value).join('/')} 内`,
     )
   }
 }
@@ -396,6 +431,9 @@ function checkRows(doc, section, table, registry, report) {
   const tableName = section.title
   const seen = new Map()
   const jsonbColumns = new Set()
+  if (table.rows.length === 0) {
+    report.error(doc.file, table.line, tableName, '字典表没有字段行')
+  }
 
   for (const row of table.rows) {
     const field = clean(row.cells[0])
@@ -540,9 +578,30 @@ function checkJsonb(doc, jsonbColumns, report) {
  * 全量模式视为错误，否则「缺五份字典」也能输出「通过」。
  */
 function checkMappings(doc, registry, report, unresolved) {
-  for (const { table, column } of doc.mappings) {
+  for (const { section, table, column } of doc.mappings) {
     for (const row of table.rows) {
       const cell = clean(row.cells[column])
+      if (/[a-z_][a-z0-9_]*\.\*/.test(cell)) {
+        report.error(
+          doc.file,
+          row.line,
+          section.title,
+          '映射不能使用通配符，须逐项填写完整的 表.字段',
+        )
+      }
+      const remainder = cell.replace(REFERENCE_PATTERN, '')
+      if (
+        /[a-z_][a-z0-9_]*\.\s*\(/.test(cell) ||
+        (/[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*/.test(cell) &&
+          /(?:^|[/、,，])[ \t]*[a-z_][a-z0-9_]*[ \t]*(?=$|[/、,，])/.test(remainder))
+      ) {
+        report.error(
+          doc.file,
+          row.line,
+          section.title,
+          '映射存在省略表名的列，须逐项填写完整的 表.字段',
+        )
+      }
       for (const [, tableName, columnName] of cell.matchAll(REFERENCE_PATTERN)) {
         const target = registry.get(tableName)
         if (!target) {
@@ -595,6 +654,11 @@ function main() {
           null,
           `缺少模块文件（owner ${entry.owner}）——不得为通过检查而新建空文件`,
         )
+      } else if (
+        SHARED_FILES.includes(entry.file) &&
+        readFileSync(join(docDir, entry.file), 'utf8').trim() === ''
+      ) {
+        report.error(`docs/data-model/${entry.file}`, 1, null, '文件为空')
       }
     }
   }
@@ -629,11 +693,14 @@ function main() {
     }
 
     const doc = entry.doc
-    if (!/owner\s*[：:]/.test(doc.text)) {
+    if (!/owner[ \t]*[：:][ \t]*[^\s\r\n]/i.test(clean(doc.text))) {
       report.error(doc.file, 1, null, '文档未标注 owner（需要 `owner：Mx`）')
     }
 
     const jsonbColumns = new Set()
+    for (const { section, table } of doc.invalidTables) {
+      report.error(doc.file, table.line, section.title, '字典表头须按约定提供完整且有序的 7 列')
+    }
     for (const { section, table } of doc.tables) {
       checkTableInfo(doc, section, table, report)
       for (const column of checkRows(doc, section, table, registry, report)) {
@@ -653,7 +720,7 @@ function main() {
       }
     }
 
-    if (doc.tables.length === 0 && !NO_TABLE_DECLARATION.test(doc.text)) {
+    if (doc.tables.length === 0 && !NO_TABLE_DECLARATION.test(clean(doc.text))) {
       report.error(
         doc.file,
         1,
