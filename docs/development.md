@@ -20,6 +20,23 @@ uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 访问 http://127.0.0.1:8000/api/v1/health；开发文档 http://127.0.0.1:8000/docs。退出用 Ctrl+C。无需 .env、模型密钥或数据库。
 
+## 登录（Issue #45，无需数据库）
+
+内置三个合成演示账号：
+
+| 账号 | 密码 | 角色 |
+| --- | --- | --- |
+| student1 | demo-student-1 | 学生 |
+| student2 | demo-student-2 | 学生 |
+| teacher1 | demo-teacher-1 | 教师 |
+
+```powershell
+$body = @{ username = 'student1'; password = 'demo-student-1' } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/auth/login -Method Post -ContentType 'application/json' -Body $body
+```
+
+会话 token 为 HS256，默认 24 小时过期（`AUTH_SESSION_TTL_SECONDS`）；`/api/v1/auth/logout` 以进程内吊销列表使其失效，**重启后失效列表清空**，属 S1 已知口径。签名密钥默认值**仅限演示**，任何非演示用途必须通过 `AUTH_SESSION_SECRET` 覆盖；合成账号可用 `AUTH_SYNTHETIC_ACCOUNTS`（JSON 数组）整体替换，参考 `.env.example`。
+
 Windows PowerShell 验证：
 
 ```powershell
