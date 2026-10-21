@@ -67,26 +67,26 @@ owner：M2 / @Saber-www；评审：M1、M5。
 
 依据：`packages/contracts/learning/courses.md` 的 Course 与分页响应。
 
-| 前端字段               | JSON 契约字段   | 领域表.列                                             | owner | 契约状态 | 列状态 | 来源     |
-| ---------------------- | --------------- | ----------------------------------------------------- | ----- | -------- | ------ | -------- |
-| `Course.id`            | `id`            | `courses.id`                                          | M5    | 已冻结   | 候选   | fixture  |
-| `Course.title`         | `title`         | `courses.title`                                       | M5    | 已冻结   | 候选   | fixture  |
-| `Course.description`   | `description`   | `courses.description`                                 | M5    | 已冻结   | 候选   | fixture  |
-| `Course.subject`       | `subject`       | `courses.subject`                                     | M5    | 已冻结   | 候选   | fixture  |
-| `Course.coverImageUrl` | `coverImageUrl` | `courses.cover_image_url`                             | M5    | 已冻结   | 候选   | fixture  |
-| `Course.teacherId`     | `teacherId`     | `courses.teacher_id`                                  | M5    | 已冻结   | 候选   | fixture  |
-| `Course.createdAt`     | `createdAt`     | `courses.created_at`                                  | M5    | 已冻结   | 候选   | fixture  |
-| `Course.updatedAt`     | `updatedAt`     | `courses.updated_at`                                  | M5    | 已冻结   | 候选   | fixture  |
-| `Course.teacherName`   | `teacherName`   | 响应组合：`user_profiles.display_name`（PR #73 候选） | M1    | 已冻结   | 候选   | 响应组合 |
-| `Course.studentCount`  | `studentCount`  | 响应组合：选课关系计数，物理表列待 M5（Q1/Q2）        | M5    | 已冻结   | 未登记 | fixture  |
-| `Course.chapterCount`  | `chapterCount`  | 响应组合：按 `chapters.id` 计数（Q2）                 | M5    | 已冻结   | 不适用 | fixture  |
-| 分页页码               | `page`          | 不适用                                                | —     | 已冻结   | 不适用 | fixture  |
-| 分页大小               | `pageSize`      | 不适用                                                | —     | 已冻结   | 不适用 | fixture  |
-| 分页总数               | `total`         | 不适用                                                | —     | 已冻结   | 不适用 | fixture  |
+| 前端字段               | JSON 契约字段   | 领域表.列                                                 | owner | 契约状态 | 列状态 | 来源    |
+| ---------------------- | --------------- | --------------------------------------------------------- | ----- | -------- | ------ | ------- |
+| `Course.id`            | `id`            | `courses.id`                                              | M5    | 已冻结   | 候选   | fixture |
+| `Course.title`         | `title`         | `courses.title`                                           | M5    | 已冻结   | 候选   | fixture |
+| `Course.description`   | `description`   | `courses.description`                                     | M5    | 已冻结   | 候选   | fixture |
+| `Course.subject`       | `subject`       | `courses.subject`                                         | M5    | 已冻结   | 候选   | fixture |
+| `Course.coverImageUrl` | `coverImageUrl` | `courses.cover_image_url`                                 | M5    | 已冻结   | 候选   | fixture |
+| `Course.teacherId`     | `teacherId`     | `courses.teacher_id`                                      | M5    | 已冻结   | 候选   | fixture |
+| `Course.createdAt`     | `createdAt`     | `courses.created_at`                                      | M5    | 已冻结   | 候选   | fixture |
+| `Course.updatedAt`     | `updatedAt`     | `courses.updated_at`                                      | M5    | 已冻结   | 候选   | fixture |
+| `Course.teacherName`   | `teacherName`   | 目标响应组合：`user_profiles.display_name`（PR #73 候选） | M1    | 已冻结   | 候选   | fixture |
+| `Course.studentCount`  | `studentCount`  | 响应组合：选课关系计数，物理表列待 M5（Q1/Q2）            | M5    | 已冻结   | 未登记 | fixture |
+| `Course.chapterCount`  | `chapterCount`  | 响应组合：按 `chapters.id` 计数（Q2）                     | M5    | 已冻结   | 不适用 | fixture |
+| 分页页码               | `page`          | 不适用                                                    | —     | 已冻结   | 不适用 | fixture |
+| 分页大小               | `pageSize`      | 不适用                                                    | —     | 已冻结   | 不适用 | fixture |
+| 分页总数               | `total`         | 不适用                                                    | —     | 已冻结   | 不适用 | fixture |
 
 要点：
 
-- `teacherName` 不存入课程行，由服务端按 `courses.teacher_id` 组合 M1 资料；前端处理 `null`。
+- `teacherName` 当前仍来自 fixture；真实接口的目标是由服务端按 `courses.teacher_id` 组合 M1 资料，不存入课程行；前端处理 `null`。
 - `studentCount` / `chapterCount` 契约只写「可回填」。建议查询聚合（Q2），不在本文登记物化列。
 - `subject` 未知取值回退显示原值，不产生持久化字段。
 
@@ -94,19 +94,19 @@ owner：M2 / @Saber-www；评审：M1、M5。
 
 课程详情使用同一 Course 契约，以下仍逐字段列出，逐项给出物理候选与响应组合来源。
 
-| 前端字段               | JSON 契约字段   | 领域表.列                                             | owner | 契约状态 | 列状态 | 来源     |
-| ---------------------- | --------------- | ----------------------------------------------------- | ----- | -------- | ------ | -------- |
-| `Course.id`            | `id`            | `courses.id`                                          | M5    | 已冻结   | 候选   | fixture  |
-| `Course.title`         | `title`         | `courses.title`                                       | M5    | 已冻结   | 候选   | fixture  |
-| `Course.description`   | `description`   | `courses.description`                                 | M5    | 已冻结   | 候选   | fixture  |
-| `Course.subject`       | `subject`       | `courses.subject`                                     | M5    | 已冻结   | 候选   | fixture  |
-| `Course.coverImageUrl` | `coverImageUrl` | `courses.cover_image_url`                             | M5    | 已冻结   | 候选   | fixture  |
-| `Course.teacherId`     | `teacherId`     | `courses.teacher_id`                                  | M5    | 已冻结   | 候选   | fixture  |
-| `Course.createdAt`     | `createdAt`     | `courses.created_at`                                  | M5    | 已冻结   | 候选   | fixture  |
-| `Course.updatedAt`     | `updatedAt`     | `courses.updated_at`                                  | M5    | 已冻结   | 候选   | fixture  |
-| `Course.teacherName`   | `teacherName`   | 响应组合：`user_profiles.display_name`（PR #73 候选） | M1    | 已冻结   | 候选   | 响应组合 |
-| `Course.studentCount`  | `studentCount`  | 响应组合：选课关系计数，物理表列待 M5（Q1/Q2）        | M5    | 已冻结   | 未登记 | fixture  |
-| `Course.chapterCount`  | `chapterCount`  | 响应组合：按 `chapters.id` 计数（Q2）                 | M5    | 已冻结   | 不适用 | fixture  |
+| 前端字段               | JSON 契约字段   | 领域表.列                                                 | owner | 契约状态 | 列状态 | 来源    |
+| ---------------------- | --------------- | --------------------------------------------------------- | ----- | -------- | ------ | ------- |
+| `Course.id`            | `id`            | `courses.id`                                              | M5    | 已冻结   | 候选   | fixture |
+| `Course.title`         | `title`         | `courses.title`                                           | M5    | 已冻结   | 候选   | fixture |
+| `Course.description`   | `description`   | `courses.description`                                     | M5    | 已冻结   | 候选   | fixture |
+| `Course.subject`       | `subject`       | `courses.subject`                                         | M5    | 已冻结   | 候选   | fixture |
+| `Course.coverImageUrl` | `coverImageUrl` | `courses.cover_image_url`                                 | M5    | 已冻结   | 候选   | fixture |
+| `Course.teacherId`     | `teacherId`     | `courses.teacher_id`                                      | M5    | 已冻结   | 候选   | fixture |
+| `Course.createdAt`     | `createdAt`     | `courses.created_at`                                      | M5    | 已冻结   | 候选   | fixture |
+| `Course.updatedAt`     | `updatedAt`     | `courses.updated_at`                                      | M5    | 已冻结   | 候选   | fixture |
+| `Course.teacherName`   | `teacherName`   | 目标响应组合：`user_profiles.display_name`（PR #73 候选） | M1    | 已冻结   | 候选   | fixture |
+| `Course.studentCount`  | `studentCount`  | 响应组合：选课关系计数，物理表列待 M5（Q1/Q2）            | M5    | 已冻结   | 未登记 | fixture |
+| `Course.chapterCount`  | `chapterCount`  | 响应组合：按 `chapters.id` 计数（Q2）                     | M5    | 已冻结   | 不适用 | fixture |
 
 | 前端字段              | JSON 契约字段 | 领域表.列                                          | owner         | 契约状态 | 列状态 | 来源    |
 | --------------------- | ------------- | -------------------------------------------------- | ------------- | -------- | ------ | ------- |
@@ -175,18 +175,18 @@ M3 已在 [PR #76](https://github.com/StephenYI43/software-engineering-group-1/p
 | 是否完整                   | `isComplete`                | `tutoring_turns.is_complete`                                                                    | M3    | 已冻结   | 候选   | 未实现  |
 | 轮次状态                   | 无契约字段                  | `tutoring_turns.status`                                                                         | M3    | 待定(Q8) | 候选   | 未实现  |
 | 中断原因                   | `stopped.reason`            | 未登记；Q8 待 M3 确认中断原因的存储映射                                                         | M3    | 待定(Q8) | 候选   | 未实现  |
-| 建议追问                   | `followUps[]`               | `tutoring_turns.follow_ups`                                                                     | M3    | 已冻结   | 候选   | fixture |
+| 建议追问                   | `followUps[]`               | `tutoring_turns.follow_ups` 对象内的 `items[]`（#76 候选）                                      | M3    | 已冻结   | 候选   | fixture |
 | 情绪                       | `emotion`                   | `tutoring_turns.emotion`                                                                        | M3    | 已冻结   | 候选   | fixture |
 | 动作                       | `action`                    | `tutoring_turns.action`                                                                         | M3    | 已冻结   | 候选   | fixture |
 | 是否 Mock                  | `isMock`                    | `tutoring_turns.is_mock`                                                                        | M3    | 已冻结   | 候选   | fixture |
-| 轮次时间                   | `createdAt`                 | `tutoring_turns.created_at`                                                                     | M3    | 已冻结   | 候选   | fixture |
+| 轮次时间                   | `createdAt`                 | `tutoring_turns.settled_at`（#76 候选终态时刻；不是 claim 时刻 `tutoring_turns.created_at`）    | M3    | 已冻结   | 候选   | fixture |
 | 引用：`turnId`             | `turnId（引用归属）`        | `turn_citations.turn_id`                                                                        | M3    | 已冻结   | 候选   | fixture |
 | 引用：`citationId`         | `citations[].citationId`    | `turn_citations.citation_id`                                                                    | M3    | 已冻结   | 候选   | fixture |
 | 引用：`documentId`         | `citations[].documentId`    | `turn_citations.document_id`                                                                    | M3    | 已冻结   | 候选   | fixture |
 | 引用：`pageNumber`         | `citations[].pageNumber`    | `turn_citations.page_number`                                                                    | M3    | 已冻结   | 候选   | fixture |
 | 引用：`snippet`            | `citations[].snippet`       | `turn_citations.snippet`                                                                        | M3    | 已冻结   | 候选   | fixture |
 | 引用标题                   | `citations[].documentTitle` | `turn_citations.document_title_snapshot`（#76 草案快照；删除策略待 Q3）                         | M3    | 已冻结   | 候选   | fixture |
-| 是否有依据                 | `hasEvidence`               | 由 `turn_citations.turn_id` 对应引用数推导，不另建列                                            | M3    | 已冻结   | 不适用 | fixture |
+| 是否有依据                 | `hasEvidence`               | `tutoring_turns.has_evidence`（#76 候选；须与该轮引用是否为空一致）                             | M3    | 已冻结   | 候选   | fixture |
 | 提示词版本                 | `promptVersion`             | `tutoring_turns.prompt_version_id` → `prompt_versions.id`，输出 `prompt_versions.version_label` | M3    | 已冻结   | 候选   | fixture |
 | 流内序号                   | `seq`                       | 不适用，传输层序号                                                                              | —     | 已冻结   | 不适用 | 运行时  |
 | 拼接文本、停止中、重试计数 | 无契约字段                  | 不适用，浏览器临时态                                                                            | —     | 无契约   | 不适用 | 运行时  |
@@ -199,6 +199,10 @@ M3 已在 [PR #76](https://github.com/StephenYI43/software-engineering-group-1/p
 - 契约允许部分文本保留供展示，但不能计入完整回答；M2 不擅自决定原文是否落库。
 - 未完成轮次不渲染引用/追问；重试创建新轮，不通过客户端推进阶段。
 - `emotion` / `action` 是 M3 输出，M2 透传给 M4，不转换成持久偏好。
+- 生产会话目标是服务端生成 `sessionId`；创建端点的路径/请求/响应仍待 M1/M3 在 #76 评审中冻结，
+  M2 再确认消费。当前 fixture 路由及 Mock 的「首次路径 ID 即创建」不能作为生产创建协议。
+- `follow_ups` 在 #76 中是带 `schemaVersion` 的对象，API 只取其 `items` 数组；不将整个对象当作 `followUps`。
+  上述三项映射对齐 #76 `b2eab6b` 的「数据库到 API 的映射」，仍待 M3 草案复审；未擅自改变表或 wire。
 
 ### 2.5 作业与提交（页面未实现，沿用 learning 已确认契约）
 
@@ -242,6 +246,8 @@ M3 已在 [PR #76](https://github.com/StephenYI43/software-engineering-group-1/p
 `answerKey` 在学生响应里必须不存在；`assignments.answer_key` 是服务端私有候选 JSONB。
 `submissions.answer` 的 wire 允许对象或字符串，物理存储及版本规则待 M5，不能直接断定全是 JSONB。
 幂等键由客户端在表单会话内复用，服务端去重；姓名/学号不复制进提交行。
+学生修改作业提交的路径、幂等与重新判分语义，以及公开选项结构仍待 M5 在 #42 补充；
+不向学生暴露 `answerKey`，不据文案自行假定编辑接口。
 
 ### 2.6 错题本（页面未实现，沿用 learning 已确认契约）
 
@@ -318,6 +324,22 @@ M3 已在 [PR #76](https://github.com/StephenYI43/software-engineering-group-1/p
 
 前端不转存 `planSuggestion`、不发送建议 items；M3 取用接口尚未落地，M5 应拒绝未能取用的建议保存。
 不能把上述字段映射当作计划页面或保存链路已实现。
+
+以下逐字段覆盖 learning 已描述的**取用预期**；M3 正式响应、授权取用及持久化位置仍待
+[#67](https://github.com/StephenYI43/software-engineering-group-1/issues/67) 确认。保存目标是 M5 候选列，不表示 M3 已登记建议存储列。
+
+| 前端字段（未接线） | JSON 契约字段                           | 领域表.列                                                                               | owner | 契约状态  | 列状态 | 来源   |
+| ------------------ | --------------------------------------- | --------------------------------------------------------------------------------------- | ----- | --------- | ------ | ------ |
+| 建议对象           | `planSuggestion`                        | M3 存储未定；无建议时为 null，不创建计划                                                | M3    | 待定(#67) | 未登记 | 未实现 |
+| 建议标题           | `planSuggestion.title`                  | M3 存储未定；M5 保存目标 `study_plans.title`                                            | M3/M5 | 待定(#67) | 候选   | 未实现 |
+| 建议计划截止时间   | `planSuggestion.suggestedPlanDueAt`     | M3 存储未定；M5 保存目标 `study_plans.due_at`；学生可覆盖，优先级待 #67 确认            | M3/M5 | 待定(#67) | 候选   | 未实现 |
+| 建议项集合         | `planSuggestion.items[]`                | M3 存储未定；M5 校验后生成 `plan_items`，集合本身不新增列                               | M3/M5 | 待定(#67) | 不适用 | 未实现 |
+| 建议项内容         | `planSuggestion.items[].content`        | M3 存储未定；M5 保存目标 `plan_items.content`                                           | M3/M5 | 待定(#67) | 候选   | 未实现 |
+| 建议项章节         | `planSuggestion.items[].chapterId`      | M3 按现有约定传 null；M5 匹配后写 `plan_items.chapter_id`，不把 null 当成 M3 已分配章节 | M3/M5 | 待定(#67) | 候选   | 未实现 |
+| 建议项知识点       | `planSuggestion.items[].knowledgePoint` | M3 存储未定；M5 保存目标 `plan_items.knowledge_point`                                   | M3/M5 | 待定(#67) | 候选   | 未实现 |
+| 建议项截止时间     | `planSuggestion.items[].suggestedDueAt` | M3 存储未定；M5 保存目标 `plan_items.due_at`                                            | M3/M5 | 待定(#67) | 候选   | 未实现 |
+
+计划及计划项 PATCH 端点已在 `study-plans.md` 定义；待 M5 补完整请求/成功/失败样例及真实 service/API。
 
 ### 2.8 数字人播报（未接线）
 
@@ -411,7 +433,7 @@ M3 已在 [PR #76](https://github.com/StephenYI43/software-engineering-group-1/p
 | Q1  | [#16](https://github.com/StephenYI43/software-engineering-group-1/issues/16) 已明确 M5 维护选课关系表；选课端点属 M1。M1 已在 #70 确认归属；#47 路径/schema 与公开 service 签名仍待冻结 | M1/M5 | 沿用 M5 表 owner 与建模/写入职责；M1 端点按 #47 调 M5 公开 service 写入口，并供鉴权/列表复用。具体调用签名待 M1/M5 确认；不另建关系表         | 两边各建一张学生-班级表，鉴权与列表读到不同数据，学生能看到没选的课 |
 | Q2  | `studentCount`/`chapterCount` 是否物化                                                                                                                                                  | M5    | 不物化，查询聚合；确需性能再加快照并写刷新策略                                                                                                | 删章节后计数不减，教师端与学生端人数不一致且无人能修                |
 | Q3  | `citations[].documentTitle` 存快照还是 join；章节删除时 `document_id` 的处置                                                                                                            | M3/M5 | 引用存快照并记文档版本；删除课件前检查引用                                                                                                    | 改名/删文档后历史引用标题变样，学生按旧标题找不到资料               |
-| Q4  | `followUps` 用 JSONB 还是子表                                                                                                                                                           | M3    | 建议 JSONB 保序；内部版本属性或外置版本对应规则待 M3，不改现有 wire                                                                           | 用子表却没有 `order`，刷新后追问顺序乱                              |
+| Q4  | #76 候选采用带 `schemaVersion` / `items` 的 `follow_ups` JSONB 对象，待 M3 复审确认                                                                                                     | M3    | 按候选对象内 `items` 保序映射现有 wire 数组；不把内部版本属性透传成 wire 新字段                                                               | 整个对象当数组读取，或版本属性被当成追问内容                        |
 | Q5  | `mistakes.question` / `mistakes.student_answer` 的 JSONB 是否版本化                                                                                                                     | M5    | 建议冻结快照版本及兼容读规则；可内置或外置版本，待 M5，不改变现有 wire                                                                        | 新增题型后旧错题渲染崩，复习时看不到题干                            |
 | Q6  | 学习进度（最后阅读章节）由谁建模                                                                                                                                                        | M5/M6 | 由 `learning_events` 推导，不新增进度表                                                                                                       | 前端用 localStorage 记进度，换设备即丢                              |
 | Q7  | 数字人偏好是否进 M4 组件契约                                                                                                                                                            | M4    | 先补 `avatar-controller.md` 入参，再谈持久化                                                                                                  | 前端自存音量，组件不认，改了没效果                                  |
