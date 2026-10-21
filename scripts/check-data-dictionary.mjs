@@ -564,15 +564,21 @@ function checkJsonb(doc, jsonbColumns, report) {
       const qualified = parts.slice(0, 2).join('.')
       let target
       let property
-      if (jsonbColumns.has(qualified)) {
+      // 显式标题先确定归属，避免列名恰好等于另一张表名时误解合法简写。
+      if (
+        context &&
+        jsonbColumns.has(context) &&
+        (path === context || path.startsWith(`${context}.`))
+      ) {
+        target = context
+        property = parts.slice(2).join('.')
+      } else if (context && parts[0] === jsonbColumns.get(context)?.column) {
+        target = context
+        property = parts.slice(1).join('.')
+      } else if (jsonbColumns.has(qualified)) {
         target = qualified
         property = parts.slice(2).join('.')
-      } else if (context) {
-        if (parts[0] === jsonbColumns.get(context)?.column) {
-          target = context
-          property = parts.slice(1).join('.')
-        }
-      } else {
+      } else if (!context) {
         const candidates = columnsByName.get(parts[0]) ?? []
         if (candidates.length > 1) {
           report.error(

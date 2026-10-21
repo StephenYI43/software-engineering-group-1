@@ -893,6 +893,35 @@ test('JSONB 全限定属性与三级归属标题冲突时报告错误', () => {
   })
 })
 
+test('显式 JSONB 归属标题优先于其他表列的前缀碰撞', () => {
+  const doc = [
+    buildDoc({
+      title: 'containers',
+      rows: [ID_ROW, '| settings | 设置 | jsonb | 否 | {} | 无 | 无 |'],
+    }),
+    buildDoc({
+      title: 'settings',
+      rows: [ID_ROW, '| options | 选项 | jsonb | 否 | {} | 无 | 无 |'],
+    }),
+    '## JSONB内部字典',
+    '### containers.settings',
+    HEADER,
+    SEPARATOR,
+    '| settings.schemaVersion | 版本 | string | 否 | 无 | 1.0 | 无 |',
+    '| settings.options | 选项对象 | object | 是 | 无 | 无 | 无 |',
+    '| settings.options.label | 选项名 | string | 是 | 无 | 无 | 无 |',
+    '',
+    '### settings.options',
+    versionTable('settings.options.schemaVersion'),
+  ].join('\n')
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+    assert.doesNotMatch(output, /不一致|重复/)
+    assert.match(output, /已登记 2 张表/)
+  })
+})
+
 for (const [label, value, allowed] of [
   ['单引号内的双引号', `'a""b'`, `'a"b'`],
   ['双引号内的单引号', `"a''b"`, `"a'b"`],
