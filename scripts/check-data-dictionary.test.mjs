@@ -768,3 +768,169 @@ test('JSONB 三级标题仍是内部属性，不能登记成实体表或跳过�
     assert.match(output, /已登记 1 张表/)
   })
 })
+
+/* -------------------------------------------------- JSONB 归属与原始字面值 */
+
+function sharedJsonbDoc(attributes) {
+  const rows = [ID_ROW, '| details | 详情 | jsonb | 否 | {} | 无 | 无（非键） |']
+  return [
+    buildDoc({ title: 'alpha', rows }),
+    buildDoc({ title: 'beta', rows }),
+    '## JSONB内部字典',
+    attributes,
+  ].join('\n')
+}
+
+function versionTable(path) {
+  return [
+    HEADER,
+    SEPARATOR,
+    `| ${path} | 结构版本 | string | 否 | 无 | 1.0 | 无（非键） |`,
+    '',
+  ].join('\n')
+}
+
+test('全量：同名 JSONB 列不能共用另一张表的版本属性', () => {
+  const doc = sharedJsonbDoc(`### alpha.details\n${versionTable('details.schemaVersion')}`)
+  withRepo({ ...completeFiles(), 'student.md': doc }, (root) => {
+    const { status, output } = run(root)
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 列 details 缺少 schemaVersion.*beta\.details/)
+  })
+})
+
+test('不同表同名 JSONB 列按三级归属标题分别登记，不误报重复', () => {
+  const attributes = [
+    '### alpha.details',
+    versionTable('details.schemaVersion'),
+    '### beta.details',
+    versionTable('details.schemaVersion'),
+  ].join('\n')
+  withRepo({ ...completeFiles(), 'student.md': sharedJsonbDoc(attributes) }, (root) => {
+    const { status, output } = run(root)
+    assert.equal(status, 0, output)
+    assert.match(output, /0 项未验证/)
+    assert.doesNotMatch(output, /重复/)
+  })
+})
+
+test('JSONB 属性接受完整的表名、列名和属性路径', () => {
+  const attributes = [
+    versionTable('alpha.details.schemaVersion'),
+    versionTable('beta.details.schemaVersion'),
+  ].join('\n')
+  withRepo({ ...completeFiles(), 'student.md': sharedJsonbDoc(attributes) }, (root) => {
+    const { status, output } = run(root)
+    assert.equal(status, 0, output)
+    assert.match(output, /0 项未验证/)
+  })
+})
+
+test('同名 JSONB 列的无归属简写报告歧义，不能任意关联到一张表', () => {
+  const doc = sharedJsonbDoc(versionTable('details.schemaVersion'))
+  withRepo({ ...completeFiles(), 'student.md': doc }, (root) => {
+    const { status, output } = run(root)
+    assert.equal(status, 1, output)
+    assert.match(output, /details\.schemaVersion.*歧义/)
+    assert.match(output, /alpha\.details/)
+    assert.match(output, /beta\.details/)
+  })
+})
+
+test('schemaVersion 必须大小写精确，不能用 schemaversion 冒充', () => {
+  const doc = buildJsonbDoc({
+    attrRows: ['| payload.schemaversion | 版本 | string | 否 | 无 | 1.0 | 无 |'],
+  })
+  withRepo({ ...completeFiles(), 'student.md': doc }, (root) => {
+    const { status, output } = run(root)
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 列 payload 缺少 schemaVersion/)
+  })
+})
+
+test('JSONB 大小写不同的属性是独立键，不误报重复', () => {
+  const doc = buildJsonbDoc({
+    attrRows: [
+      '| payload.schemaVersion | 版本 | string | 否 | 无 | 1.0 | 无 |',
+      '| payload.Status | 大写状态 | string | 是 | 无 | 无 | 无 |',
+      '| payload.status | 小写状态 | string | 是 | 无 | 无 | 无 |',
+    ],
+  })
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 0, output)
+    assert.doesNotMatch(output, /重复/)
+  })
+})
+
+test('同一 JSONB 属性的简写和全限定路径仍会识别为重复', () => {
+  const doc = buildJsonbDoc({
+    attrRows: [
+      '| payload.schemaVersion | 版本 | string | 否 | 无 | 1.0 | 无 |',
+      '| items.payload.schemaVersion | 重复版本 | string | 否 | 无 | 1.0 | 无 |',
+    ],
+  }).replace('## JSONB内部字典', '## JSONB内部字典\n\n### items.payload')
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /JSONB 属性 items\.payload\.schemaVersion 重复/)
+  })
+})
+
+test('JSONB 全限定属性与三级归属标题冲突时报告错误', () => {
+  const doc = sharedJsonbDoc(
+    [
+      '### alpha.details',
+      versionTable('beta.details.schemaVersion'),
+      '### beta.details',
+      versionTable('beta.details.schemaVersion'),
+    ].join('\n'),
+  )
+  withRepo({ 'student.md': doc }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /beta\.details\.schemaVersion.*归属标题 alpha\.details.*不一致/)
+  })
+})
+
+for (const [label, value, allowed] of [
+  ['单引号内的双引号', `'a""b'`, `'a"b'`],
+  ['双引号内的单引号', `"a''b"`, `"a'b"`],
+  ['字符串内的星号', "'a**b'", "'ab'"],
+  ['字符串内的反引号', "'a`b'", "'ab'"],
+]) {
+  test(`${label}不因清理而改变，矛盾默认值会失败`, () => {
+    const row = `| status | 状态 | text | 否 | ${value} | CHECK IN(${allowed}) | 无 |`
+    withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 1, output)
+      assert.match(output, /字段 status 的默认值.*不在取值范围/)
+      assert.match(output, /0 项未验证/)
+    })
+  })
+}
+
+test('默认值只有 Markdown 装饰时仍按空单元格失败', () => {
+  const row = '| status | 状态 | text | 否 | ** ** | CHECK IN(active) | 无 |'
+  withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+    const { status, output } = run(root, ['--files', 'student.md'])
+    assert.equal(status, 1, output)
+    assert.match(output, /字段 status 的第 5 列（默认值）为空/)
+  })
+})
+
+for (const [label, value, allowed] of [
+  ['单引号转义', "'a''b'", "'a''b'"],
+  ['双引号转义', '"a""b"', '"a""b"'],
+  ['外层代码装饰与内部字面值', "`'a**`b'`", "'a**`b'"],
+  ['外层粗体装饰', "**'a**b'**", "'a**b'"],
+]) {
+  test(`${label}保持合法值精确一致`, () => {
+    const row = `| status | 状态 | text | 否 | ${value} | CHECK IN(${allowed}) | 无 |`
+    withRepo({ 'student.md': buildDoc({ rows: [ID_ROW, row] }) }, (root) => {
+      const { status, output } = run(root, ['--files', 'student.md'])
+      assert.equal(status, 0, output)
+      assert.match(output, /0 项未验证/)
+    })
+  })
+}

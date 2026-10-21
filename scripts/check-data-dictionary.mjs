@@ -104,9 +104,19 @@ class Report {
   }
 }
 
-/** 去掉 markdown 装饰，便于比较；不改变字段语义。 */
+/** 清理标题、字段名与元信息的 markdown 装饰；不用于 SQL 字面值。 */
 function clean(cell) {
   return (cell ?? '').replace(/`/g, '').replace(/\*\*/g, '').trim()
+}
+
+/** SQL 单元格只去外层装饰，代码跨度内的星号、反引号仍是字面内容。 */
+function unwrapLiteralCell(cell) {
+  let value = (cell ?? '').trim()
+  while (value.startsWith('**') && value.endsWith('**') && value.length >= 4) {
+    value = value.slice(2, -2).trim()
+  }
+  const code = /^(`+)([\s\S]*?)\1$/.exec(value)
+  return code ? code[2].trim() : value
 }
 
 /** 拆一行表格为单元格。行首行尾的管道不算单元格。 */
@@ -155,7 +165,11 @@ function findTables(section) {
     const rows = []
     let j = i + 2
     while (j < entries.length && entries[j].text.trim().startsWith('|')) {
-      rows.push({ cells: splitRow(entries[j].text).map(clean), line: entries[j].line })
+      // 第 5/6 列含 SQL 默认值与约束，内部装饰字符可能属于字符串本身。
+      const cells = splitRow(entries[j].text).map((cell, index) =>
+        index === 4 || index === 5 ? cell : clean(cell),
+      )
+      rows.push({ cells, line: entries[j].line })
       j += 1
     }
     tables.push({ header, rows, line: entries[i].line })
@@ -246,7 +260,7 @@ function parseDoc(name, text) {
     if (section.title === null) continue
     if (/JSONB/i.test(section.title) || /JSONB/i.test(section.parentTitle ?? '')) {
       doc.jsonbSection ??= { section, tables: [] }
-      doc.jsonbSection.tables.push(...findTables(section))
+      doc.jsonbSection.tables.push(...findTables(section).map((table) => ({ ...table, section })))
       continue
     }
     for (const table of findTables(section)) {
@@ -340,12 +354,14 @@ function checkNullable(doc, tableName, field, line, nullableCell, keyCell, repor
 
 /** 仅解析可精确比较的字面量，不执行 SQL；其余表达式交人工核验。 */
 function parseLiteral(raw) {
-  let value = clean(raw)
+  let value = unwrapLiteralCell(raw)
   // 只接受字符串到 text 的保值转换，其他 cast 的舍入/类型语义交人工核验。
   const textCast = /^('(?:[^']|'')*')\s*::\s*text$/i.exec(value)
   if (textCast) value = textCast[1]
-  const quoted = /^'((?:[^']|'')*)'$/.exec(value) ?? /^"((?:[^"]|"")*)"$/.exec(value)
-  if (quoted) return { kind: 'string', value: quoted[1].replace(/''/g, "'").replace(/""/g, '"') }
+  const singleQuoted = /^'((?:[^']|'')*)'$/.exec(value)
+  if (singleQuoted) return { kind: 'string', value: singleQuoted[1].replace(/''/g, "'") }
+  const doubleQuoted = /^"((?:[^"]|"")*)"$/.exec(value)
+  if (doubleQuoted) return { kind: 'string', value: doubleQuoted[1].replace(/""/g, '"') }
   if (/^null$/i.test(value)) return { kind: 'null', value: 'null' }
   if (/^(true|false)$/i.test(value)) return { kind: 'boolean', value: value.toLowerCase() }
   if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value)) {
@@ -363,7 +379,7 @@ function parseLiteral(raw) {
 /** 默认值 vs 枚举/CHECK：能对账就对账，对不了账标「未验证」，不默认为通过。 */
 function checkDefaultAgainstEnum(doc, tableName, field, line, defaultCell, valuesCell, report) {
   if (!/\b(?:IN|CHECK)\b/i.test(valuesCell)) return
-  let expression = clean(valuesCell)
+  let expression = unwrapLiteralCell(valuesCell)
     .replace(/^CHECK\s*/i, '')
     .trim()
   if (expression.startsWith('(') && expression.endsWith(')')) {
@@ -371,7 +387,7 @@ function checkDefaultAgainstEnum(doc, tableName, field, line, defaultCell, value
   }
   // 必须匹配整个简单约束，不能拿 NOT IN 或复合 CHECK 的片段冒充核验。
   const inMatch = /^(?:([a-z_][a-z0-9_]*)\s+)?IN\s*\(([^()]*)\)$/i.exec(expression)
-  if (/^(无|缺省)(?:$|[；;，,（(])/.test(defaultCell)) return
+  if (/^(无|缺省)(?:$|[；;，,（(])/.test(unwrapLiteralCell(defaultCell))) return
   const literal = parseLiteral(defaultCell)
   const allowed =
     inMatch && (!inMatch[1] || inMatch[1] === field)
@@ -466,7 +482,7 @@ function checkRows(doc, section, table, registry, report) {
     }
 
     row.cells.forEach((cell, index) => {
-      if (cell.trim() === '') {
+      if ((index === 4 || index === 5 ? unwrapLiteralCell(cell) : cell).trim() === '') {
         report.error(
           doc.file,
           row.line,
@@ -488,7 +504,9 @@ function checkRows(doc, section, table, registry, report) {
 
 /**
  * JSONB 内部字典：不仅要「有这一节」，还要每个属性行七列齐全、
- * 每个 JSONB 列都有 schemaVersion、属性必须挂在已声明的列下。
+ * 每张表的 JSONB 列都有 schemaVersion、属性必须挂在已声明的列下。
+ * 三级标题 table.column 提供归属；也接受 table.column.property 全限定路径。
+ * column.property 简写只在归属唯一时接受；JSON 属性名区分大小写。
  */
 function checkJsonb(doc, jsonbColumns, report) {
   if (jsonbColumns.size === 0) return
@@ -498,15 +516,24 @@ function checkJsonb(doc, jsonbColumns, report) {
       doc.file,
       1,
       null,
-      `存在 JSONB 列（${[...jsonbColumns].join('、')}）但没有「JSONB内部字典」小节`,
+      `存在 JSONB 列（${[...jsonbColumns.keys()].join('、')}）但没有「JSONB内部字典」小节`,
     )
     return
   }
 
   const declared = new Set()
   const seen = new Map()
+  const columnsByName = new Map()
+  for (const [qualified, { column }] of jsonbColumns) {
+    const candidates = columnsByName.get(column) ?? []
+    candidates.push(qualified)
+    columnsByName.set(column, candidates)
+  }
 
   for (const table of doc.jsonbSection.tables) {
+    const context = /^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/i.test(table.section.title)
+      ? table.section.title
+      : null
     for (const row of table.rows) {
       const path = clean(row.cells[0])
       if (!path) {
@@ -523,7 +550,7 @@ function checkJsonb(doc, jsonbColumns, report) {
         continue
       }
       row.cells.forEach((cell, index) => {
-        if (cell.trim() === '') {
+        if ((index === 4 || index === 5 ? unwrapLiteralCell(cell) : cell).trim() === '') {
           report.error(
             doc.file,
             row.line,
@@ -533,39 +560,73 @@ function checkJsonb(doc, jsonbColumns, report) {
         }
       })
 
-      const lower = path.toLowerCase()
-      if (seen.has(lower)) {
-        report.error(
-          doc.file,
-          row.line,
-          'JSONB内部字典',
-          `JSONB 属性 ${path} 重复（首次出现在第 ${seen.get(lower)} 行）`,
-        )
+      const parts = path.split('.')
+      const qualified = parts.slice(0, 2).join('.')
+      let target
+      let property
+      if (jsonbColumns.has(qualified)) {
+        target = qualified
+        property = parts.slice(2).join('.')
+      } else if (context) {
+        if (parts[0] === jsonbColumns.get(context)?.column) {
+          target = context
+          property = parts.slice(1).join('.')
+        }
       } else {
-        seen.set(lower, row.line)
+        const candidates = columnsByName.get(parts[0]) ?? []
+        if (candidates.length > 1) {
+          report.error(
+            doc.file,
+            row.line,
+            'JSONB内部字典',
+            `JSONB 属性 ${path} 归属有歧义（${candidates.join('、')}），须用全限定路径或三级归属标题`,
+          )
+          continue
+        }
+        target = candidates[0]
+        property = parts.slice(1).join('.')
       }
-
-      const [column] = path.split('.')
-      if (!jsonbColumns.has(column)) {
+      if (context && target !== context) {
         report.error(
           doc.file,
           row.line,
           'JSONB内部字典',
-          `JSONB 属性 ${path} 挂在未声明的 JSONB 列 ${column} 下`,
+          `JSONB 属性 ${path} 与归属标题 ${context} 不一致，须引用该标题对应的已声明 JSONB 列`,
         )
         continue
       }
-      declared.add(lower)
+      if (!target || !jsonbColumns.has(target)) {
+        report.error(
+          doc.file,
+          row.line,
+          'JSONB内部字典',
+          `JSONB 属性 ${path} 挂在未声明的 JSONB 列 ${parts[0]} 下`,
+        )
+        continue
+      }
+
+      const identity = `${target}${property ? `.${property}` : ''}`
+      if (seen.has(identity)) {
+        report.error(
+          doc.file,
+          row.line,
+          'JSONB内部字典',
+          `JSONB 属性 ${path} 重复（首次出现在第 ${seen.get(identity)} 行）`,
+        )
+      } else {
+        seen.set(identity, row.line)
+      }
+      declared.add(identity)
     }
   }
 
-  for (const column of jsonbColumns) {
-    if (!declared.has(`${column.toLowerCase()}.schemaversion`)) {
+  for (const [qualified, { column }] of jsonbColumns) {
+    if (!declared.has(`${qualified}.schemaVersion`)) {
       report.error(
         doc.file,
         1,
         null,
-        `JSONB 列 ${column} 缺少 schemaVersion 属性（内部结构必须带版本）`,
+        `JSONB 列 ${column} 缺少 schemaVersion 属性（${qualified}；内部结构必须带版本）`,
       )
     }
   }
@@ -697,14 +758,14 @@ function main() {
       report.error(doc.file, 1, null, '文档未标注 owner（需要 `owner：Mx`）')
     }
 
-    const jsonbColumns = new Set()
+    const jsonbColumns = new Map()
     for (const { section, table } of doc.invalidTables) {
       report.error(doc.file, table.line, section.title, '字典表头须按约定提供完整且有序的 7 列')
     }
     for (const { section, table } of doc.tables) {
       checkTableInfo(doc, section, table, report)
       for (const column of checkRows(doc, section, table, registry, report)) {
-        jsonbColumns.add(column)
+        jsonbColumns.set(`${section.title}.${column}`, { column })
       }
     }
     checkJsonb(doc, jsonbColumns, report)
