@@ -140,6 +140,7 @@ published_at为NULL是草稿，学生不可见；发布后course/class与题目�
 | question_type | 题型 | varchar(32) | 否 | 无；调用方提供 | question_type IN ('single_choice','multiple_choice','fill_blank','short_answer','proof') | 无 |
 | public_question | 学生可见题目与选项 | jsonb | 否 | '{"schemaVersion":"1.0","options":[]}'::jsonb | jsonb_typeof(public_question) = 'object' AND (public_question->>'schemaVersion') IS NOT DISTINCT FROM '1.0'; 内部属性与合法键按本域JSONB字典校验 | 无 |
 | answer_key | 教师私有标准答案 | jsonb | 是 | NULL | jsonb_typeof(answer_key) = 'object'; 内部属性与合法键按本域JSONB字典校验 | 无 |
+| answer_key_schema_version | 答案键外置版本 | varchar(16) | 否 | '1.0' | answer_key_schema_version = '1.0' | 无 |
 | max_score | 满分 | integer | 否 | 无；调用方提供 | max_score >= 1 | 无 |
 | due_at | 截止时刻 | timestamptz(6) | 是 | NULL | 按类型边界；跨行/权限由service验证 | 无 |
 | published_at | 发布时间 | timestamptz(6) | 是 | NULL | 按类型边界；跨行/权限由service验证 | 无 |

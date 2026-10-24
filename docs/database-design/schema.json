@@ -170,11 +170,11 @@
         }
       ],
       "constraints": [
-        "updated_at >= created_at",
         "id ~ '^user_[0-9a-f]{32}$'",
         "status IN ('active','disabled')",
-        "username_key = lower(username)",
-        "username ~ '^[A-Za-z0-9_.-]{1,64}$'"
+        "updated_at >= created_at",
+        "username ~ '^[A-Za-z0-9_.-]{1,64}$'",
+        "username_key = lower(username)"
       ],
       "indexes": [
         "ix_users_status"
@@ -321,15 +321,15 @@
         }
       ],
       "constraints": [
-        "request_id ~ '^req_[0-9a-f]{32}$'",
-        "result IN ('succeeded','failed','denied')",
         "actor_type IN ('user','system')",
-        "jsonb_typeof(details) = 'object'"
+        "jsonb_typeof(details) = 'object'",
+        "request_id ~ '^req_[0-9a-f]{32}$'",
+        "result IN ('succeeded','failed','denied')"
       ],
       "indexes": [
+        "ix_admin_audit_actor_time",
         "ix_admin_audit_request",
-        "ix_admin_audit_target_time",
-        "ix_admin_audit_actor_time"
+        "ix_admin_audit_target_time"
       ],
       "rules": "沿用#75平台实现；用户名白名单及配置发布状态已在本批字典明确。权限/审计/密码与会话边界见平台说明。",
       "json": {},
@@ -460,14 +460,14 @@
         }
       ],
       "constraints": [
-        "request_id ~ '^req_[0-9a-f]{32}$'",
         "(revoked_at IS NULL AND revoke_reason IS NULL) OR (revoked_at IS NOT NULL AND revoke_reason IS NOT NULL AND revoke_reason IN ('logout','admin_revoke','role_changed','password_changed'))",
+        "expires_at > issued_at",
         "jti_digest ~ '^[0-9a-f]{64}$'",
-        "expires_at > issued_at"
+        "request_id ~ '^req_[0-9a-f]{32}$'"
       ],
       "indexes": [
-        "ix_auth_sessions_user_expiry",
-        "ix_auth_sessions_expiry"
+        "ix_auth_sessions_expiry",
+        "ix_auth_sessions_user_expiry"
       ],
       "rules": "沿用#75平台实现；用户名白名单及配置发布状态已在本批字典明确。权限/审计/密码与会话边界见平台说明。",
       "json": {},
@@ -585,16 +585,17 @@
         }
       ],
       "constraints": [
+        "(status = 'draft' AND activated_at IS NULL) OR (status <> 'draft' AND activated_at IS NOT NULL)",
+        "(value->>'schemaVersion') IS NOT DISTINCT FROM '1.0'",
         "jsonb_typeof(value) = 'object'",
         "status IN ('draft','active','retired')",
-        "version > 0",
         "value ? 'schemaVersion' AND value ->> 'schemaVersion' = '1.0'",
-        "(status = 'draft' AND activated_at IS NULL) OR (status <> 'draft' AND activated_at IS NOT NULL)"
+        "version > 0"
       ],
       "indexes": [
         "uq_system_config_active"
       ],
-      "rules": "沿用#75平台实现；用户名白名单及配置发布状态已在本批字典明确。权限/审计/密码与会话边界见平台说明。",
+      "rules": "沿用#75平台实现；用户名白名单及配置发布状态已在本批字典明确。权限/审计/密码与会话边界见平台说明。本批参考DDL另补schemaVersion不得为JSON null的CHECK，尚需新增应用迁移；不声称#75已具备。",
       "json": {},
       "status": "#75候选实现及真实PG测试已通过；未合并部署"
     },
@@ -765,12 +766,12 @@
         }
       ],
       "constraints": [
-        "revoked_at IS NULL OR revoked_at >= granted_at",
-        "NOT is_primary OR revoked_at IS NULL"
+        "NOT is_primary OR revoked_at IS NULL",
+        "revoked_at IS NULL OR revoked_at >= granted_at"
       ],
       "indexes": [
-        "uq_user_roles_primary",
-        "ix_user_roles_role_user"
+        "ix_user_roles_role_user",
+        "uq_user_roles_primary"
       ],
       "rules": "沿用#75平台实现；用户名白名单及配置发布状态已在本批字典明确。权限/审计/密码与会话边界见平台说明。",
       "json": {},
