@@ -1,0 +1,82 @@
+"""Seven-element JSON property inventory, including external version metadata."""
+
+
+def p(path, meaning, typ, required="否", default="无", bounds="按版本校验", relation="无"):
+    return [path, meaning, typ, required, default, bounds, relation]
+
+
+def v():
+    return p("schemaVersion", "内部结构版本", "string(16)", "是", "显式1.0", "固定1.0且不为JSON null")
+
+
+JSON = {
+    "admin_audit_logs.details": {"version": "空对象允许；非空时details.schemaVersion", "fields": [
+        p("schemaVersion", "审计摘要版本", "string(16)", "非空对象时", "无", "1.0"),
+        p("changedFields", "改动字段名", "string[0..50]", bounds="每项1..100字符，只记字段名"),
+        p("reasonCode", "原因码", "string(64)", bounds="白名单，不含正文/密钥") ]},
+    "system_config_versions.value": {"version": "value.schemaVersion", "fields": [v(),
+        p("maxUploadBytes", "上传大小限制", "integer", "upload_limits时", bounds="大于0，上限由部署批准"),
+        p("allowedMimeTypes", "媒体类型白名单", "string[]", "upload_limits时", bounds="非空、去重；仍须实际文件校验"),
+        p("sessionTtlSeconds", "会话秒数", "integer", "session_policy时", "86400", "与AuthSettings范围一致，不放宽权限") ]},
+    "assignments.public_question": {"version": "public_question.schemaVersion", "fields": [v(),
+        p("options", "学生可见选项", "object[0..26]", "是", "[]", "选择题非空，非选择题空数组"),
+        p("options[].key", "选项代码", "string(8)", "有选项时", bounds="同题唯一，不含答案提示"),
+        p("options[].text", "选项正文", "string(1000)", "有选项时", bounds="1..1000字符，不执行HTML/命令") ]},
+    "assignments.answer_key": {"version": "外置列answer_key_schema_version=1.0；原wire不增加键", "fields": [
+        p("@answer_key_schema_version", "外置版本元数据", "varchar(16)", "列必填", "1.0", "不属于JSON内部键", "assignments.answer_key_schema_version"),
+        p("options", "正确选项代码", "string[]", "选择题时", bounds="单选恰1项，多选非空唯一，须命中公开选项key"),
+        p("acceptableBlanks", "填空等价答案", "string[]", "填空题时", bounds="每项1..1000字符，按题目空数校验；上限100项") ]},
+    "submissions.answer": {"version": "外置列answer_schema_version=1.0", "fields": [
+        p("@answer_schema_version", "外置版本元数据", "varchar(16)", "列必填", "1.0", "不向原wire添加schemaVersion", "submissions.answer_schema_version"),
+        p("$", "答案根值", "object或string", "是", bounds="string 1..8000字符；object按题型"),
+        p("options", "所选代码", "string[0..26]", "选择题时", bounds="代码唯一且属于该题"),
+        p("blanks", "填空答案", "string[1..100]", "填空时", bounds="每项<=1000字符，数量与题目匹配") ]},
+    "mistakes.question": {"version": "外置列snapshot_schema_version=1.0", "fields": [
+        p("@snapshot_schema_version", "快照版本", "varchar(16)", "列必填", "1.0", "不属于JSON键", "mistakes.snapshot_schema_version"),
+        p("stem", "题干", "string(4000)", "是", bounds="1..4000字符"),
+        p("questionType", "题型", "string(32)", "是", bounds="五种作业题型或tutoring_question"),
+        p("options", "选项快照", "object[]或null", "是", "null", "同public_question.options，不含正确答案"),
+        p("attachmentUrl", "受控附件地址", "string(2048)或null", default="null", bounds="鉴权后生成/净化，拒绝可执行协议") ]},
+    "mistakes.student_answer": {"version": "与question共用snapshot_schema_version=1.0", "fields": [
+        p("$", "答错时答案快照", "object/string/null", "否", "NULL", "同submissions.answer的1.0结构；NULL是未知，不是空答案", "mistakes.snapshot_schema_version") ]},
+    "learning_events.payload": {"version": "envelope列schema_version=1.0；payload不加版本键", "fields": [
+        p("@schema_version", "事件envelope版本", "varchar(16)", "列必填", "1.0", "外置版本，不改变wire", "learning_events.schema_version"),
+        p("chapterId", "浏览或错题章节", "string(64)或null", "chapter_viewed时", bounds="浏览时非空且属course；错题可空", relation="chapters.id，service核验"),
+        p("submissionId", "提交标识", "string(64)", "提交/批阅时", relation="submissions.id"),
+        p("assignmentId", "作业标识", "string(64)或null", "assignment_submitted时", bounds="错题来源可空", relation="assignments.id"),
+        p("questionType", "题型", "string(32)", "assignment_submitted时", bounds="冻结作业枚举"),
+        p("isCorrect", "判分结果", "boolean或null", "批阅时", "null", "主观未判NULL，不冒充false"),
+        p("score", "得分", "integer或null", default="null", bounds="0..max_score或NULL"),
+        p("mistakeId", "错题标识", "string(64)", "错题事件时", relation="mistakes.id"),
+        p("source", "错题或计划来源", "string(32)", "recorded/saved时", bounds="按event_type枚举"),
+        p("planId", "计划标识", "string(64)", "计划/计划项事件时", relation="study_plans.id"),
+        p("itemsCount", "计划条目数", "integer", "study_plan_saved时", bounds="1..20"),
+        p("itemId", "完成计划项", "string(64)", "plan_item_completed时", relation="plan_items.id"),
+        p("reminderId", "提醒标识", "string(64)", "reminder_triggered时", relation="reminders.id"),
+        p("type", "提醒类型", "string(32)", "提醒事件时", bounds="冻结三种提醒类型"),
+        p("dueAt", "提醒关联截止", "ISO8601 UTC", "提醒事件时", bounds="合法UTC时刻") ]},
+    "tutoring_turns.follow_ups": {"version": "follow_ups.schemaVersion", "fields": [v(),
+        p("items", "追问建议", "string[0..3]", "是", "[]", "每项1..200字符；未完成不当完整建议") ]},
+    "document_import_jobs.pages_without_text": {"version": "pages_without_text.schemaVersion", "fields": [v(),
+        p("pages", "无文字页号", "integer[]", "是", "[]", "页号>=1、升序去重；只有成功解析才作最终报告") ]},
+    "avatar_config_versions.config": {"version": "config.schemaVersion", "fields": [v(),
+        p("avatarAssetKey", "形象资源键", "string(512)", "是", bounds="受控资源，不是任意路径/URL"),
+        p("subjectStyle", "学科风格", "string(32)", "是", "other", "math/physics/chemistry/english/cs/other"),
+        p("tone", "语气风格", "string(16)", "是", "gentle", "gentle/neutral/strict"),
+        p("defaultEmotion", "默认情绪", "string(16)", "是", "neutral", "neutral/encouraging/thinking/celebrating"),
+        p("defaultAction", "默认动作", "string(16)", "是", "idle", "idle/nod/point/write") ]},
+    "media_jobs.params": {"version": "params.schemaVersion", "fields": [v(),
+        p("language", "识别语言", "string(16)", default="缺省", bounds="zh-CN/en-US"),
+        p("voiceCode", "受控音色代码", "string(64)", bounds="服务端白名单，不是任意URL"),
+        p("rate", "语速", "number", default="1.0", bounds="0.5..2.0，具体provider进一步校验") ]},
+    "analytics_report_snapshots.metrics": {"version": "metrics.schemaVersion", "fields": [v(),
+        p("dataState", "数据完整性", "string(16)", "是", bounds="unknown/partial/known"),
+        p("studySeconds", "学习秒数", "integer或null", "是", "null", ">=0；unknown必须NULL"),
+        p("knowledgePoints", "知识点雷达指标", "object[0..100]", "是", "[]", "每项有key/mastery/sampleCount/dataState"),
+        p("knowledgePoints[].key", "知识点标签", "string(100)", "有项时", bounds="非空"),
+        p("knowledgePoints[].mastery", "掌握度", "number或null", "有项时", "null", "0..1或未知NULL；不能凭空填分"),
+        p("knowledgePoints[].sampleCount", "指标样本", "integer", "有项时", "0", ">=0"),
+        p("knowledgePoints[].dataState", "指标状态", "string(16)", "有项时", "unknown", "unknown/partial/known"),
+        p("weakSubjects", "薄弱学科", "string[]", "是", "[]", "受控学科代码，未知不编造"),
+        p("suggestions", "诊断建议", "string[0..10]", "是", "[]", "每项<=500字符，需样本依据、无敏感正文") ]},
+}

@@ -239,6 +239,7 @@ CREATE TABLE "assignments" (
   "question_type" varchar(32) NOT NULL CHECK (question_type IN ('single_choice','multiple_choice','fill_blank','short_answer','proof')),
   "public_question" jsonb NOT NULL DEFAULT '{"schemaVersion":"1.0","options":[]}'::jsonb CHECK (jsonb_typeof(public_question) = 'object' AND (public_question->>'schemaVersion') IS NOT DISTINCT FROM '1.0'),
   "answer_key" jsonb CHECK (jsonb_typeof(answer_key) = 'object'),
+  "answer_key_schema_version" varchar(16) NOT NULL DEFAULT '1.0' CHECK (answer_key_schema_version = '1.0'),
   "max_score" integer NOT NULL CHECK (max_score >= 1),
   "due_at" timestamptz(6),
   "published_at" timestamptz(6),
@@ -1315,6 +1316,8 @@ COMMENT ON COLUMN "assignments"."question_type" IS '题型';
 COMMENT ON COLUMN "assignments"."public_question" IS '学生可见题目与选项';
 
 COMMENT ON COLUMN "assignments"."answer_key" IS '教师私有标准答案';
+
+COMMENT ON COLUMN "assignments"."answer_key_schema_version" IS '答案键外置版本';
 
 COMMENT ON COLUMN "assignments"."max_score" IS '满分';
 

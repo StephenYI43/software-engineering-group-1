@@ -128,6 +128,7 @@ t("assignments", "作业发布与答案管理", "M5", "业务与管理", [
     enum("question_type", "题型", "single_choice/multiple_choice/fill_blank/short_answer/proof"),
     obj("public_question", "学生可见题目与选项", "'{\"schemaVersion\":\"1.0\",\"options\":[]}'::jsonb"),
     obj("answer_key", "教师私有标准答案", nullable=True, version=False),
+    c("answer_key_schema_version", "varchar(16)", "答案键外置版本", default="'1.0'", check="answer_key_schema_version = '1.0'"),
     c("max_score", "integer", "满分", check="max_score >= 1"),
     c("due_at", "timestamptz(6)", "截止时刻", nullable=True),
     c("published_at", "timestamptz(6)", "发布时间", nullable=True), *times()],

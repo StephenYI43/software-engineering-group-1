@@ -16,6 +16,7 @@ from sqlalchemy.schema import CreateIndex, CreateTable
 
 from app.core.db.metadata import Base
 from domain_model import TABLES
+from json_properties import JSON
 
 OUT = ROOT / "docs/database-design"
 DICT = ROOT / "docs/data-model"
@@ -117,8 +118,16 @@ def main():
             sql.append(f"COMMENT ON COLUMN {q(table['name'])}.{q(col['name'])} IS {lit(col['meaning'])};")
     sql.append("COMMIT;")
     (OUT / "schema.sql").write_text("\n\n".join(sql)+"\n", encoding="utf-8")
-    inventory = {"date": "2026-10-24", "platformCommit": "e1fb5ff", "studentCommit": "423d0d6", "tutoringCommit": "b2eab6b", "tables": tables}
+    json_columns = {t["name"]+"."+c["name"] for t in tables for c in t["columns"] if c["type"]=="jsonb"}
+    assert json_columns == set(JSON), (json_columns-set(JSON),set(JSON)-json_columns)
+    inventory = {"date": "2026-10-24", "platformCommit": "e1fb5ff", "studentCommit": "423d0d6", "tutoringCommit": "b2eab6b", "tables": tables, "jsonProperties": JSON}
     (OUT / "schema.json").write_text(json.dumps(inventory, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+    json_lines = ["# JSONB属性七要素与版本位置", "", "所有下列属性都是设计约束，除平台已验证子集外尚待service校验实现；数据库CHECK不替代所有嵌套结构校验。@前缀表示外置列元数据而不是JSON键，不修改既有wire。", ""]
+    for qualified, spec in JSON.items():
+        json_lines += ["## "+qualified, "", "版本位置："+spec["version"], "", "| 属性路径 | 中文名称/含义 | 类型及长度 | 必填或可空 | 默认值 | 范围与约束 | 关联与版本位置 |", "| --- | --- | --- | --- | --- | --- | --- |"]
+        json_lines += ["| "+" | ".join(x.replace("|", "\\|") for x in row)+" |" for row in spec["fields"]]
+        json_lines.append("")
+    (OUT / "jsonb-schemas.md").write_text("\n".join(json_lines), encoding="utf-8")
     files = {"M5": "learning.md", "M3": "tutoring-knowledge.md", "M4": "avatar-media.md", "M6": "analytics-admin.md"}
     for owner, filename in files.items():
         selected = [x for x in tables if x["owner"] == owner]

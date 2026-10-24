@@ -33,7 +33,7 @@ auth_sessions按现有jti的摘要定位，不保存原始token，也不改变JW
 | 物理字段名    | 中文名称/业务含义                                  | PostgreSQL类型与长度/精度 | 可空 | 默认值                            | 取值范围/枚举/唯一/CHECK                         | PK/FK/关联与删除/更新规则  |
 | ------------- | -------------------------------------------------- | ------------------------- | ---- | --------------------------------- | ------------------------------------------------ | -------------------------- |
 | id            | 用户标识；API userId/studentId/teacherId均引用此值 | varchar(64)               | 否   | 无；服务端生成                    | user_+32小写hex；不解析ID授权                    | PK；其他域引用默认RESTRICT |
-| username      | 登录名原始展示值                                   | varchar(64)               | 否   | 无                                | 去首尾空白后长度1..64；不可包含控制字符          | 无（非键）                 |
+| username      | 登录名原始展示值                                   | varchar(64)               | 否   | 无                                | CHECK `^[A-Za-z0-9_.-]{1,64}$`；仅ASCII字母数字、下划线、点和连字符；中文显示名放display_name | 无（非键）                 |
 | username_key  | 登录名规范化值                                     | varchar(64)               | 否   | 无；由登录名规范化生成            | ASCII登录名统一小写；非ASCII规则变更需独立决策   | UNIQUE(username_key)       |
 | password_hash | 密码哈希及算法参数编码                             | text                      | 否   | 无                                | 采用维护中的密码哈希实现；不得为明文或仅快速散列 | 无（非键）                 |
 | status        | 账号状态                                           | varchar(16)               | 否   | active                            | CHECK IN(active,disabled)                        | 无（非键）                 |
@@ -146,7 +146,10 @@ auth_sessions按现有jti的摘要定位，不保存原始token，也不改变JW
 | value              | 有版本的配置值       | jsonb                     | 否   | 无                        | 对象；schemaVersion必填；按config_key校验属性，不能任意JSON | 无（非键）                                           |
 | created_by_user_id | 创建者；系统seed可空 | varchar(64)               | 是   | NULL                      | 非空须授权管理员                                            | FK→users.id；ON DELETE SET NULL；ON UPDATE NO ACTION |
 | created_at         | 版本创建时间         | timestamptz(6)            | 否   | CURRENT_TIMESTAMP         | UTC                                                         | 无（非键）                                           |
-| activated_at       | 发布时间             | timestamptz(6)            | 是   | NULL                      | draft时NULL；active时必须非空；发布/退役与audit同事务       | 无（非键）                                           |
+| activated_at       | 发布时间             | timestamptz(6)            | 是   | NULL                      | draft时NULL；active/retired时必须非空；发布/退役与audit同事务；不得伪造发布时间 | 无（非键）                                           |
+
+本批明确D1/D2：用户名限制与#75实际CHECK一致；配置只允许draft→active→retired，未发布草稿不可直接退役，继续保留draft或经授权清理。此处不改变#75代码。
+本批参考schema.sql另补schemaVersion不接受JSON null的CHECK；#75现有表达式可能因SQL UNKNOWN放过该值，须由M1后续新增迁移修正，不声称原测试已覆盖。
 
 ## JSONB内部字典
 
