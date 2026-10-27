@@ -20,6 +20,17 @@ uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 访问 http://127.0.0.1:8000/api/v1/health；开发文档 http://127.0.0.1:8000/docs。退出用 Ctrl+C。无需 .env、模型密钥或数据库。
 
+**答疑 Mock 路由默认不挂载。** `app.main:app` 是生产入口，**不包含** `/api/v1/tutoring/*`：
+该路由仍使用合成身份（所有外部请求都会被当成同一个用户）与 Mock 模型，M1 的
+真实鉴权（Issue #16）落地前不得暴露。需要本地联调时，使用显式的开发工厂：
+
+```bash
+uv run --locked uvicorn app.main:create_dev_app --factory --host 127.0.0.1 --port 8000 --reload
+```
+
+该工厂只应由开发者和测试使用，**不要部署**。测试通过
+`create_app(enable_mock_tutoring=True)` 获得同样的挂载；没有任何环境变量能开启它。
+
 ## 登录（Issue #45，无需数据库）
 
 内置三个合成演示账号：

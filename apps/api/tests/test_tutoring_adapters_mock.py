@@ -67,8 +67,15 @@ def _content(chunks: list[ModelChunk]) -> str:
 
 
 def _sample_content(name: str) -> str:
+    """The frozen prose, without the envelope separator.
+
+    `01` and `03` are completed SSE responses, so their `content` ends with the
+    newline the service dispatches before the envelope. The adapter in
+    envelope-off mode produces exactly the prose that precedes that newline.
+    """
+
     raw = (_SAMPLES / name).read_text(encoding="utf-8")
-    return str(json.loads(raw)["content"])
+    return str(json.loads(raw)["content"]).removesuffix("\n")
 
 
 def test_happy_path_is_deltas_then_usage_then_finished() -> None:
@@ -88,13 +95,21 @@ def test_no_evidence_output_reproduces_the_frozen_sample_content() -> None:
 
 
 def test_chunk_boundaries_match_the_frozen_sse_sample() -> None:
-    """Seven deltas is why `05-sse-stream.txt` variant one runs `seq` 1..9."""
+    """Seven script deltas is why `05-sse-stream.txt` variant one runs `seq` 1..9.
+
+    The last visible delta in the sample ends with the envelope separator newline;
+    the adapter in envelope-off mode stops at the prose before it.
+    """
+
     deltas = _deltas(_collect(MockModelClient(scenario="normal"), _request()))
     variant_one = (_SAMPLES / "05-sse-stream.txt").read_text(encoding="utf-8").split("## 变体二")[0]
     visible = re.findall(r'"textDelta":"([^"]*)"', variant_one)
     assert len(visible) == 3, "样例只印出首两个与最后一个 delta，其余用省略号"
     assert len(deltas) == 7
-    assert [deltas[0].text, deltas[-1].text] == [visible[0], visible[-1]]
+    assert [deltas[0].text, deltas[-1].text] == [
+        visible[0],
+        visible[-1].removesuffix("\\n"),
+    ]
 
 
 def test_adapter_chunks_reproduce_the_frozen_seq_range() -> None:

@@ -16,7 +16,7 @@ M3 已确认（见 Issue #17）在 `TutoringResponse` 新增 `planSuggestion` �
 M5 保存路径：
 - 学生在 M2 答疑界面看到 `planSuggestion` 后点击「保存为计划」，前端只发 `sourceTurnId` 给 M5；
 - **M5 service 层按 `sourceTurnId` 调用 M3 取用接口拉取 `planSuggestion`**，校验 `turnId` 存在且属于当前学生
-  与取内容合并为同一次调用（M3 对不存在或不归属的 `turnId` 一律 404，防枚举，沿用 `tutoring-response.md:194` 约定）；
+  与取内容合并为同一次调用（M3 对不存在或不归属的 `turnId` 一律 404，防枚举，沿用 `tutoring-response.md:195` 约定）；
 - M5 校验建议合理性（截止日期、计划项数等）、持久化、发布学习事件。
 - M5 保存时**按 `knowledgePoint` 或学生当前课程/章节匹配填入 `chapterId`**（见下方映射）。
 
