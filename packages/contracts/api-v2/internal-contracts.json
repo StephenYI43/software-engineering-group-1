@@ -1,0 +1,56 @@
+[
+  {
+    "id": "INT01",
+    "name": "verified_actor",
+    "provider": "M1",
+    "consumer": "全部服务端域",
+    "input": "Bearer凭证，仅服务端验签入口读取",
+    "output": "已验证user_id/当前role/授权上下文",
+    "rules": "验签、过期、撤销、账号停用均校验；浏览器自报角色无效；配置DB故障503不退回演示身份。"
+  },
+  {
+    "id": "INT02",
+    "name": "course_access_and_enrollment",
+    "provider": "M5",
+    "consumer": "M1/M3/M6",
+    "input": "统一Session、verified_actor、course_id/class_id、目标学生（仅管理写）",
+    "output": "访问结论或Enrollment/TeachingAssignment",
+    "rules": "M5唯一关系实体和公开读写service；M1负责HTTP身份和角色门禁。repository不commit，返回前验证父子和有效区间。"
+  },
+  {
+    "id": "INT03",
+    "name": "get_owned_plan_suggestion",
+    "provider": "M3",
+    "consumer": "M5",
+    "input": "verified_actor、source_turn_id",
+    "output": "PlanSuggestion或统一NotFound",
+    "rules": "一次完成owner/已完成/有建议校验，M5直接调用，不接收浏览器转存items；章节由M5匹配。"
+  },
+  {
+    "id": "INT04",
+    "name": "learning_event_feed",
+    "provider": "M5",
+    "consumer": "M6",
+    "input": "共享Session中的只读feed视图；M6持有consumer_id/ledger",
+    "output": "LearningEventV2批次",
+    "rules": "READ COMMITTED每轮新事务锁consumer，反连接未处理账本及open隔离；聚合/ledger同事务，不以最大id或时间永久排除旧提交。"
+  },
+  {
+    "id": "SDK01",
+    "name": "AvatarController.speak",
+    "provider": "M4",
+    "consumer": "M2",
+    "input": "既有组件camelCase参数utteranceId/text/emotion/action",
+    "output": "completed/stopped/error回调",
+    "rules": "组件不是HTTP API，不强行改成snake_case；M2从v2完整终帧适配，只播报is_complete=true的结果，非法情绪动作降级。"
+  },
+  {
+    "id": "SDK02",
+    "name": "AvatarController.stop",
+    "provider": "M4",
+    "consumer": "M2",
+    "input": "当前utteranceId",
+    "output": "停止当前播报，不删除文字",
+    "rules": "与后端答疑stop不同：此处仅停本地播报，不推断答疑成功或学习时长；组件卸载也清理播放资源。"
+  }
+]

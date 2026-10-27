@@ -37,13 +37,11 @@ M5（导学建议保存）消费。契约先于实现，目的是让调用方可
 - `citation` 对象的具体形状
 - 请求体的 `extra="forbid"` 约束（客户端不得自行推进教学阶段）
 
-## 仍待团队拍板
+## 情绪动作的既有冻结来源
 
-**`emotion` / `action` 的取值集合由 M4 冻结。**
-`docs/tasks/m3.md:23` 写「（依赖）M4 情绪/动作枚举」，`docs/tasks/m4.md:23` 写
-「（依赖）M3 回答文本与动作白名单」，两份文档互相矛盾。
-本契约暂用**占位值**（见 tutoring-response.md 的取值表），M4 给出正式枚举后必须替换。
-**在这些值冻结前，本契约不应被视为最终版。**
+M4 已在 [avatar-controller.md](../avatar/avatar-controller.md) 冻结情绪与动作全集。
+M3 校验输出，M2/M4 按同一集合消费，不再互等“先冻结”。本次只澄清既有取值，不改变 v1 wire。
+v2 的 snake_case 与统一封套候选另见 [接口设计](../../../docs/api-design/README.md)，不能直接替换旧客户端。
 
 ## 已确认事项
 

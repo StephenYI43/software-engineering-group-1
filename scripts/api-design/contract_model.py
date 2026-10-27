@@ -103,9 +103,7 @@ SUBJECT = enum(
     "cs",
     "other",
 )
-STAGE = enum(
-    "服务端教学阶段，不透传模型内部思维链", "thought", "hint", "step", "summary"
-)
+STAGE = enum("服务端教学阶段，不透传模型内部思维链", "thought", "hint", "step", "summary")
 EMOTION = enum("M4冻结情绪", "neutral", "encouraging", "thinking", "celebrating")
 ACTION = enum("M4冻结动作", "idle", "nod", "point", "write")
 QUESTION = enum(
@@ -187,9 +185,7 @@ model(
         "code": number("1xxxx参数、2xxxx业务与权限、5xxxx系统", 10000, 59999),
         "message": text("可向用户展示的脱敏提示", 300),
         "data": nullable(ref("ErrorDetails")),
-        "trace_id": text(
-            "本次服务端请求号，与X-Request-ID一致", 36, pattern=r"^req_[0-9a-f]{32}$"
-        ),
+        "trace_id": text("本次服务端请求号，与X-Request-ID一致", 36, pattern=r"^req_[0-9a-f]{32}$"),
     },
 )
 model(
@@ -232,13 +228,9 @@ model(
         "user": ref("UserSummary"),
     },
     db="users/user_roles/auth_sessions",
-    rules=(
-        "JWT验签、过期、撤销和当前角色均由服务端校验；数据库故障503，不退回Mock身份。",
-    ),
+    rules=("JWT验签、过期、撤销和当前角色均由服务端校验；数据库故障503，不退回Mock身份。",),
 )
-model(
-    "LogoutResult", "当前凭证幂等撤销", {"revoked": {"type": "boolean", "const": True}}
-)
+model("LogoutResult", "当前凭证幂等撤销", {"revoked": {"type": "boolean", "const": True}})
 model(
     "Profile",
     "本人资料，跨设备语音偏好不在此重复存储",
@@ -288,9 +280,7 @@ model(
         "title": text("课程名称", 100),
         "description": nullable(text("课程简介", 2000)),
         "subject": SUBJECT,
-        "cover_image_url": nullable(
-            text("受控图片地址，展示时转义", 2048, format="uri")
-        ),
+        "cover_image_url": nullable(text("受控图片地址，展示时转义", 2048, format="uri")),
         "teacher_id": ID,
         "teacher_name": nullable(text("平台摘要组合，不另存姓名", 100)),
         "student_count": nullable(number("按权限聚合人数，未知为null")),
@@ -425,9 +415,7 @@ model(
     {"course_id": ID, "chapter_id": ID, "class_id": nullable(ID)},
     optional=("class_id",),
     owner="M5",
-    rules=(
-        "正文成功可见才提交；class_id需当前有效选课且属于course；无唯一班级不复制到每班。",
-    ),
+    rules=("正文成功可见才提交；class_id需当前有效选课且属于course；无唯一班级不复制到每班。",),
 )
 model(
     "LearningEventReceipt",
@@ -475,9 +463,7 @@ SCHEMAS["StudentAnswer"] = {
         },
         {
             "type": "object",
-            "properties": {
-                "blanks": array(text("填空内容", 1000), "按顺序填空", 100, 1)
-            },
+            "properties": {"blanks": array(text("填空内容", 1000), "按顺序填空", 100, 1)},
             "required": ["blanks"],
             "additionalProperties": False,
         },
@@ -615,9 +601,7 @@ model(
         {"required": ["submission_id"]},
         {"required": ["question"]},
     ],
-    rules=(
-        "仅错答或用户明确标记收录，不把所有答疑问题自动当错题。来源与归属在服务端一次校验。",
-    ),
+    rules=("仅错答或用户明确标记收录，不把所有答疑问题自动当错题。来源与归属在服务端一次校验。",),
 )
 model(
     "Mistake",
@@ -796,9 +780,7 @@ model(
     {"session_id": ID, "course_id": nullable(ID), "current_stage": STAGE, **BASE_TIMES},
     owner="M3",
     db="tutoring_sessions",
-    rules=(
-        "course_id=null仅通用问答，不授予任何课程文档权限；教师默认不能读学生完整对话。",
-    ),
+    rules=("course_id=null仅通用问答，不授予任何课程文档权限；教师默认不能读学生完整对话。",),
 )
 model(
     "SessionCreate",
@@ -817,9 +799,7 @@ model(
     },
     optional=("requested_stage", "course_id"),
     owner="M3",
-    rules=(
-        "禁止stage/emotion/action/user_id等越权字段；requested_stage由服务端钳制。",
-    ),
+    rules=("禁止stage/emotion/action/user_id等越权字段；requested_stage由服务端钳制。",),
 )
 model(
     "TutoringResponse",
@@ -841,9 +821,7 @@ model(
     },
     owner="M3",
     db="tutoring_turns/turn_citations/prompt_versions",
-    rules=(
-        "content与全部delta拼接完全一致，不静默截断；has_evidence=false时citations=[]。",
-    ),
+    rules=("content与全部delta拼接完全一致，不静默截断；has_evidence=false时citations=[]。",),
 )
 model(
     "TutoringTurn",
@@ -947,9 +925,7 @@ model(
         "version": number("版本", 1),
         "mime_type": text("经魔数核验的文件类型", 100),
         "byte_size": number("字节数", 1, 20971520),
-        "status": enum(
-            "可检索状态，与任务状态不同", "uploaded", "available", "withdrawn"
-        ),
+        "status": enum("可检索状态，与任务状态不同", "uploaded", "available", "withdrawn"),
         "created_at": TIME,
         "updated_at": TIME,
     },
@@ -974,9 +950,7 @@ model(
     "异步任务的公开最小状态，不返回worker密钥或存储key",
     {
         "job_id": ID,
-        "status": enum(
-            "统一任务状态", "queued", "running", "succeeded", "failed", "cancelled"
-        ),
+        "status": enum("统一任务状态", "queued", "running", "succeeded", "failed", "cancelled"),
         "is_mock": boolean("是否模拟执行"),
         "result_id": nullable(ID),
         "error_code": nullable(text("失败码，不包含原文件或模型正文", 64)),
@@ -984,9 +958,7 @@ model(
         "started_at": nullable(TIME),
         "finished_at": nullable(TIME),
     },
-    rules=(
-        "202只表示入队，不能当处理完成；成功/失败必须终结时间；失败不得伪造输出资源。",
-    ),
+    rules=("202只表示入队，不能当处理完成；成功/失败必须终结时间；失败不得伪造输出资源。",),
 )
 model(
     "DocumentGrantCreate",
@@ -1037,9 +1009,7 @@ model(
     },
     optional=("consent_version",),
     owner="M4",
-    rules=(
-        "kind=audio时consent_version必填且已知有效；缺同意拒绝，不采集真实课堂录音作演示。",
-    ),
+    rules=("kind=audio时consent_version必填且已知有效；缺同意拒绝，不采集真实课堂录音作演示。",),
 )
 model(
     "MediaAsset",
@@ -1079,9 +1049,7 @@ model(
             "not": {"required": ["source_turn_id"]},
         },
     ],
-    rules=(
-        "TTS只读取本人已完成轮次正文；ASR/OCR核验输入owner与类型；文本、密钥不写任务params。",
-    ),
+    rules=("TTS只读取本人已完成轮次正文；ASR/OCR核验输入owner与类型；文本、密钥不写任务params。",),
 )
 model(
     "Transcript",
@@ -1157,9 +1125,7 @@ model(
         "id": ID,
         "utterance_id": ID,
         "status": enum("状态", "started", "completed", "stopped", "error"),
-        "stop_reason": nullable(
-            enum("停止原因", "user_stop", "replaced", "component_unmounted")
-        ),
+        "stop_reason": nullable(enum("停止原因", "user_stop", "replaced", "component_unmounted")),
         "started_at": TIME,
         "ended_at": nullable(TIME),
     },
@@ -1171,16 +1137,12 @@ model(
     "只允许started进入一个终态",
     {
         "status": enum("终态", "completed", "stopped", "error"),
-        "stop_reason": nullable(
-            enum("停止原因", "user_stop", "replaced", "component_unmounted")
-        ),
+        "stop_reason": nullable(enum("停止原因", "user_stop", "replaced", "component_unmounted")),
         "error_code": nullable(text("脱敏错误码", 64)),
     },
     optional=("stop_reason", "error_code"),
     owner="M4",
-    rules=(
-        "条件UPDATE校验原状态；重复相同终态幂等，竞争不同终态409；error/stopped补相应原因。",
-    ),
+    rules=("条件UPDATE校验原状态；重复相同终态幂等，竞争不同终态409；error/stopped补相应原因。",),
 )
 model(
     "FocusCreate",
@@ -1390,9 +1352,7 @@ model(
         "data_through": nullable(TIME),
         "duration_seconds": ref("MetricNumber"),
         "knowledge_points": array(ref("KnowledgeMastery"), "雷达维度", 100),
-        "suggestions": array(
-            text("有样本依据的建议，不含其他学生正文", 500), "建议", 10
-        ),
+        "suggestions": array(text("有样本依据的建议，不含其他学生正文", 500), "建议", 10),
         "generated_at": TIME,
     },
     owner="M6",
@@ -1446,9 +1406,7 @@ model(
     "ConfigCreate",
     "版本化配置，不接受明文密钥或任意provider URL",
     {
-        "config_key": enum(
-            "本轮允许配置键", "upload_limits", "session_policy", "avatar_style"
-        ),
+        "config_key": enum("本轮允许配置键", "upload_limits", "session_policy", "avatar_style"),
         "value": text("经过键专属schema校验的JSON文本，不含秘密", 8000),
     },
     db="system_config_versions/avatar_config_versions；value入库为有版本JSON对象",
@@ -1474,9 +1432,7 @@ model(
     "ConfigStatusPatch",
     "配置发布或退役，不能伪造发布时间",
     {"status": enum("目标状态", "active", "retired")},
-    rules=(
-        "draft→active→retired；未发布草稿不能直接退役；同key仅一个active，与审计同事务。",
-    ),
+    rules=("draft→active→retired；未发布草稿不能直接退役；同key仅一个active，与审计同事务。",),
 )
 model(
     "AuditEntry",
@@ -1517,6 +1473,66 @@ model(
     owner="M3",
 )
 model(
+    "ExamQuestionInput",
+    "教师已核验的结构化题目；不得把未经确认的OCR直接发布",
+    {
+        "stem": text("题干", 8000),
+        "question_type": QUESTION,
+        "options": array(ref("Option"), "公开选项", 26),
+        "answer_key": nullable(ref("AnswerKey")),
+        "max_score": number("满分", 1, 10000),
+    },
+    owner="M5",
+    rules=(
+        "按作业相同题型规则验证答案；主观题answer_key=null，交卷后待教师批阅，不伪造自动评分。",
+    ),
+    example={
+        "stem": "用自己的话解释函数极限的含义。",
+        "question_type": "short_answer",
+        "options": [],
+        "answer_key": None,
+        "max_score": 100,
+    },
+)
+model(
+    "ExamQuestionKey",
+    "教师受控答案视图，不进入学生题目列表",
+    {"question_id": ID, "answer_key": nullable(ref("AnswerKey"))},
+    owner="M5",
+)
+model(
+    "ExamPaperPatch",
+    "教师发布经人工确认的试卷；题目变更另建版本",
+    {
+        "title": text("试卷名", 100),
+        "duration_minutes": number("建议考试分钟", 1, 300),
+        "publish": boolean("发布状态；有作答后不得回改评分依据"),
+    },
+    optional=("title", "duration_minutes", "publish"),
+    minProperties=1,
+    owner="M5",
+    example={"publish": True},
+)
+model(
+    "ExamGradeInput",
+    "教师逐题批阅，不接受客户端伪造批阅人",
+    {
+        "question_id": ID,
+        "is_correct": boolean("最终结论"),
+        "score": number("得分，不超过该题满分", 0, 10000),
+    },
+    owner="M5",
+)
+model(
+    "ExamGradingPatch",
+    "本班教师批阅已交卷试题",
+    {"grades": array(ref("ExamGradeInput"), "本次批阅项，question_id不得重复", 200, 1)},
+    owner="M5",
+    rules=(
+        "仅已交卷或已批阅作答；逐项校验题目属于该卷、分数上限、授课范围。保留改判审计，全部完成后才graded。",
+    ),
+)
+model(
     "ExamPaperCreate",
     "教师导入获许可真题/模拟卷",
     {
@@ -1524,8 +1540,13 @@ model(
         "document_id": ID,
         "title": text("试卷名", 100),
         "duration_minutes": number("建议考试分钟", 1, 300),
+        "questions": array(ref("ExamQuestionInput"), "教师确认的题目，按数组顺序编号", 200, 1),
     },
     owner="M5",
+    optional=("document_id",),
+    rules=(
+        "创建为草稿；若有document_id须同课程且有管理权。试卷和题目同事务，不能伪称仅给PDF即可自动出卷；发布走独立PATCH。",
+    ),
 )
 model(
     "ExamPaper",
@@ -1565,4 +1586,19 @@ model(
     "考试内逐题作答",
     {"question_id": ID, "answer": ref("StudentAnswer")},
     owner="M5",
+)
+model(
+    "ExamQuestion",
+    "公开试题，禁止带标准答案",
+    {
+        "id": ID,
+        "paper_id": ID,
+        "order": number("卷内顺序", 1, 200),
+        "stem": text("题干", 8000),
+        "question_type": QUESTION,
+        "options": array(ref("Option"), "公开选项", 26),
+        "max_score": number("该题满分", 1, 10000),
+    },
+    owner="M5",
+    db="S2新增exam_questions；不是assignments的私有答案视图",
 )
