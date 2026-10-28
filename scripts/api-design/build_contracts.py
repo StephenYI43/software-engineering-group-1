@@ -203,6 +203,23 @@ def install_examples() -> None:
         "publish": True,
     }
     SCHEMAS["AnswerKey"]["example"] = {"options": ["A"]}
+    public_assignment = sample(SCHEMAS["Assignment"])
+    public_assignment.update(
+        {
+            k: deepcopy(v)
+            for k, v in SCHEMAS["AssignmentCreate"]["example"].items()
+            if k in public_assignment
+        }
+    )
+    public_assignment["published_at"] = NOW
+    SCHEMAS["Assignment"]["example"] = public_assignment
+    SCHEMAS["ExamQuestion"]["example"] = {
+        "id": "question_" + "1" * 32,
+        "paper_id": IDS["exam"],
+        "order": 1,
+        **deepcopy(SCHEMAS["ExamQuestionInput"]["example"]),
+    }
+    SCHEMAS["ExamQuestion"]["example"].pop("answer_key")
     SCHEMAS["SubmissionCreate"]["example"] = {"answer": {"options": ["B"]}}
     SCHEMAS["StudentAnswer"]["example"] = {"options": ["B"]}
     SCHEMAS["MistakeCreate"]["example"] = {"source_turn_id": IDS["turn"]}
@@ -221,6 +238,15 @@ def install_examples() -> None:
     SCHEMAS["ConfigCreate"]["example"] = {
         "config_key": "session_policy",
         "value": {"schema_version": "1.0", "session_ttl_seconds": 3600},
+    }
+    SCHEMAS["ConfigVersion"]["example"] = {
+        "id": IDS["config"],
+        "config_key": "session_policy",
+        "version": 1,
+        "status": "draft",
+        "created_at": NOW,
+        "activated_at": None,
+        "retired_at": None,
     }
     SCHEMAS["ProfilePatch"]["example"] = {"display_name": "合成学生甲"}
     SCHEMAS["AssignmentPatch"]["example"] = {"due_at": "2026-11-03T01:00:00Z"}
@@ -490,6 +516,18 @@ def build_spec() -> tuple[dict, list[dict]]:
         elif op["status"] != 204:
             name = envelope(op["response"] + "Envelope", ref(op["response"]))
             value = wrap(sample(ref(op["response"])), "accepted" if op["status"] == 202 else "ok")
+            if op["request"] and isinstance(value["data"], dict):
+                request_example = sample(ref(op["request"]))
+                if isinstance(request_example, dict):
+                    for key, field in request_example.items():
+                        if key in value["data"] and not isinstance(field, (dict, list)):
+                            value["data"][key] = deepcopy(field)
+                    if "published_at" in value["data"] and "publish" in request_example:
+                        value["data"]["published_at"] = NOW if request_example["publish"] else None
+                if op["response"] == "ConfigVersion" and value["data"]["status"] != "draft":
+                    value["data"]["activated_at"] = NOW
+                    if value["data"]["status"] == "retired":
+                        value["data"]["retired_at"] = NOW
             success["content"] = {"application/json": {"schema": ref(name), "example": value}}
             op["response_example"] = value
         else:

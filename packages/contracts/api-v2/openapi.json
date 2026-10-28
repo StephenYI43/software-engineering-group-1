@@ -3245,7 +3245,7 @@
                     "id": "resource_11111111111111111111111111111111",
                     "class_id": "class_11111111111111111111111111111111",
                     "student_user_id": "user_11111111111111111111111111111111",
-                    "status": "pending",
+                    "status": "approved",
                     "message": null,
                     "created_at": "2026-10-27T01:00:00Z",
                     "updated_at": "2026-10-27T01:00:00Z"
@@ -3560,13 +3560,22 @@
                         "course_id": "course_11111111111111111111111111111111",
                         "class_id": "class_11111111111111111111111111111111",
                         "chapter_id": null,
-                        "title": "高等数学第一章复习",
-                        "description": null,
+                        "title": "极限概念练习",
+                        "description": "以下哪项符合题意？",
                         "question_type": "single_choice",
-                        "options": [],
+                        "options": [
+                          {
+                            "key": "A",
+                            "text": "合成选项甲"
+                          },
+                          {
+                            "key": "B",
+                            "text": "合成选项乙"
+                          }
+                        ],
                         "max_score": 100,
                         "due_at": null,
-                        "published_at": null,
+                        "published_at": "2026-10-27T01:00:00Z",
                         "teacher_id": "user_11111111111111111111111111111111",
                         "created_at": "2026-10-27T01:00:00Z",
                         "updated_at": "2026-10-27T01:00:00Z"
@@ -3697,13 +3706,22 @@
                     "course_id": "course_11111111111111111111111111111111",
                     "class_id": "class_11111111111111111111111111111111",
                     "chapter_id": null,
-                    "title": "高等数学第一章复习",
-                    "description": null,
+                    "title": "极限概念练习",
+                    "description": "以下哪项符合题意？",
                     "question_type": "single_choice",
-                    "options": [],
+                    "options": [
+                      {
+                        "key": "A",
+                        "text": "合成选项甲"
+                      },
+                      {
+                        "key": "B",
+                        "text": "合成选项乙"
+                      }
+                    ],
                     "max_score": 100,
                     "due_at": null,
-                    "published_at": null,
+                    "published_at": "2026-10-27T01:00:00Z",
                     "teacher_id": "user_11111111111111111111111111111111",
                     "created_at": "2026-10-27T01:00:00Z",
                     "updated_at": "2026-10-27T01:00:00Z"
@@ -3852,13 +3870,22 @@
                     "course_id": "course_11111111111111111111111111111111",
                     "class_id": "class_11111111111111111111111111111111",
                     "chapter_id": null,
-                    "title": "高等数学第一章复习",
-                    "description": null,
+                    "title": "极限概念练习",
+                    "description": "以下哪项符合题意？",
                     "question_type": "single_choice",
-                    "options": [],
+                    "options": [
+                      {
+                        "key": "A",
+                        "text": "合成选项甲"
+                      },
+                      {
+                        "key": "B",
+                        "text": "合成选项乙"
+                      }
+                    ],
                     "max_score": 100,
                     "due_at": null,
-                    "published_at": null,
+                    "published_at": "2026-10-27T01:00:00Z",
                     "teacher_id": "user_11111111111111111111111111111111",
                     "created_at": "2026-10-27T01:00:00Z",
                     "updated_at": "2026-10-27T01:00:00Z"
@@ -3996,13 +4023,22 @@
                     "course_id": "course_11111111111111111111111111111111",
                     "class_id": "class_11111111111111111111111111111111",
                     "chapter_id": null,
-                    "title": "高等数学第一章复习",
-                    "description": null,
+                    "title": "极限概念练习",
+                    "description": "以下哪项符合题意？",
                     "question_type": "single_choice",
-                    "options": [],
+                    "options": [
+                      {
+                        "key": "A",
+                        "text": "合成选项甲"
+                      },
+                      {
+                        "key": "B",
+                        "text": "合成选项乙"
+                      }
+                    ],
                     "max_score": 100,
-                    "due_at": null,
-                    "published_at": null,
+                    "due_at": "2026-11-03T01:00:00Z",
+                    "published_at": "2026-10-27T01:00:00Z",
                     "teacher_id": "user_11111111111111111111111111111111",
                     "created_at": "2026-10-27T01:00:00Z",
                     "updated_at": "2026-10-27T01:00:00Z"
@@ -4875,8 +4911,8 @@
                         "B"
                       ]
                     },
-                    "is_correct": null,
-                    "score": null,
+                    "is_correct": false,
+                    "score": 0,
                     "graded_by": null,
                     "graded_at": null,
                     "created_at": "2026-10-27T01:00:00Z",
@@ -5019,7 +5055,7 @@
                       "options": []
                     },
                     "student_answer": null,
-                    "source_turn_id": null,
+                    "source_turn_id": "turn_11111111111111111111111111111111",
                     "submission_id": null,
                     "created_at": "2026-10-27T01:00:00Z",
                     "updated_at": "2026-10-27T01:00:00Z"
@@ -5732,13 +5768,22 @@
                         "course_id": "course_11111111111111111111111111111111",
                         "class_id": "class_11111111111111111111111111111111",
                         "chapter_id": null,
-                        "title": "高等数学第一章复习",
-                        "description": null,
+                        "title": "极限概念练习",
+                        "description": "以下哪项符合题意？",
                         "question_type": "single_choice",
-                        "options": [],
+                        "options": [
+                          {
+                            "key": "A",
+                            "text": "合成选项甲"
+                          },
+                          {
+                            "key": "B",
+                            "text": "合成选项乙"
+                          }
+                        ],
                         "max_score": 100,
                         "due_at": null,
-                        "published_at": null,
+                        "published_at": "2026-10-27T01:00:00Z",
                         "teacher_id": "user_11111111111111111111111111111111",
                         "created_at": "2026-10-27T01:00:00Z",
                         "updated_at": "2026-10-27T01:00:00Z"
@@ -6295,7 +6340,7 @@
                   "data": {
                     "id": "resource_11111111111111111111111111111111",
                     "student_id": "user_11111111111111111111111111111111",
-                    "title": "高等数学第一章复习",
+                    "title": "第一章复习计划",
                     "course_id": null,
                     "source": "manual",
                     "source_turn_id": null,
@@ -6613,7 +6658,7 @@
                     "plan_id": "plan_11111111111111111111111111111111",
                     "content": "先回顾极限定义，再尝试一道基础题。",
                     "order": 1,
-                    "status": "pending",
+                    "status": "done",
                     "chapter_id": null,
                     "knowledge_point": null,
                     "due_at": null,
@@ -9023,7 +9068,7 @@
                     "id": "resource_11111111111111111111111111111111",
                     "document_id": "doc_11111111111111111111111111111111",
                     "user_id": null,
-                    "class_id": null,
+                    "class_id": "class_11111111111111111111111111111111",
                     "granted_at": "2026-10-27T01:00:00Z",
                     "revoked_at": null
                   },
@@ -10572,7 +10617,7 @@
                   "data": {
                     "config_version_id": "config_11111111111111111111111111111111",
                     "auto_play": false,
-                    "volume": 0,
+                    "volume": 0.8,
                     "speech_rate": 0.5,
                     "subtitles_enabled": false,
                     "created_at": "2026-10-27T01:00:00Z",
@@ -10864,7 +10909,7 @@
                   "data": {
                     "id": "resource_11111111111111111111111111111111",
                     "utterance_id": "playback_11111111111111111111111111111111",
-                    "status": "started",
+                    "status": "completed",
                     "stop_reason": null,
                     "started_at": "2026-10-27T01:00:00Z",
                     "ended_at": null
@@ -11291,7 +11336,7 @@
                   "data": {
                     "id": "resource_11111111111111111111111111111111",
                     "course_id": null,
-                    "status": "running",
+                    "status": "completed",
                     "started_at": "2026-10-27T01:00:00Z",
                     "ended_at": null,
                     "duration_seconds": null
@@ -13032,8 +13077,8 @@
                   "data": {
                     "items": [
                       {
-                        "id": "resource_11111111111111111111111111111111",
-                        "config_key": "合成示例",
+                        "id": "config_11111111111111111111111111111111",
+                        "config_key": "session_policy",
                         "version": 1,
                         "status": "draft",
                         "created_at": "2026-10-27T01:00:00Z",
@@ -13148,8 +13193,8 @@
                   "code": 0,
                   "message": "ok",
                   "data": {
-                    "id": "resource_11111111111111111111111111111111",
-                    "config_key": "合成示例",
+                    "id": "config_11111111111111111111111111111111",
+                    "config_key": "session_policy",
                     "version": 1,
                     "status": "draft",
                     "created_at": "2026-10-27T01:00:00Z",
@@ -13305,12 +13350,12 @@
                   "code": 0,
                   "message": "ok",
                   "data": {
-                    "id": "resource_11111111111111111111111111111111",
-                    "config_key": "合成示例",
+                    "id": "config_11111111111111111111111111111111",
+                    "config_key": "session_policy",
                     "version": 1,
-                    "status": "draft",
+                    "status": "active",
                     "created_at": "2026-10-27T01:00:00Z",
-                    "activated_at": null,
+                    "activated_at": "2026-10-27T01:00:00Z",
                     "retired_at": null
                   },
                   "trace_id": "req_11111111111111111111111111111111"
@@ -14457,7 +14502,7 @@
                     "title": "高等数学第一章复习",
                     "duration_minutes": 1,
                     "question_count": 1,
-                    "published_at": null
+                    "published_at": "2026-10-27T01:00:00Z"
                   },
                   "trace_id": "req_11111111111111111111111111111111"
                 }
@@ -14780,11 +14825,11 @@
                   "data": {
                     "items": [
                       {
-                        "id": "resource_11111111111111111111111111111111",
+                        "id": "question_11111111111111111111111111111111",
                         "paper_id": "exam_11111111111111111111111111111111",
                         "order": 1,
-                        "stem": "合成示例",
-                        "question_type": "single_choice",
+                        "stem": "用自己的话解释函数极限的含义。",
+                        "question_type": "short_answer",
                         "options": [],
                         "max_score": 100
                       }
@@ -17200,7 +17245,32 @@
         "x-database": "assignments/public_question",
         "x-business-rules": [
           "学生看不到草稿及answer_key，字段必须不存在而非null。"
-        ]
+        ],
+        "example": {
+          "id": "resource_11111111111111111111111111111111",
+          "course_id": "course_11111111111111111111111111111111",
+          "class_id": "class_11111111111111111111111111111111",
+          "chapter_id": null,
+          "title": "极限概念练习",
+          "description": "以下哪项符合题意？",
+          "question_type": "single_choice",
+          "options": [
+            {
+              "key": "A",
+              "text": "合成选项甲"
+            },
+            {
+              "key": "B",
+              "text": "合成选项乙"
+            }
+          ],
+          "max_score": 100,
+          "due_at": null,
+          "published_at": "2026-10-27T01:00:00Z",
+          "teacher_id": "user_11111111111111111111111111111111",
+          "created_at": "2026-10-27T01:00:00Z",
+          "updated_at": "2026-10-27T01:00:00Z"
+        }
       },
       "AssignmentCreate": {
         "type": "object",
@@ -21647,7 +21717,16 @@
         "additionalProperties": false,
         "x-owner": "M1",
         "x-database": "system_config_versions/avatar_config_versions",
-        "x-business-rules": []
+        "x-business-rules": [],
+        "example": {
+          "id": "config_11111111111111111111111111111111",
+          "config_key": "session_policy",
+          "version": 1,
+          "status": "draft",
+          "created_at": "2026-10-27T01:00:00Z",
+          "activated_at": null,
+          "retired_at": null
+        }
       },
       "ConfigStatusPatch": {
         "type": "object",
@@ -22338,7 +22417,16 @@
         "additionalProperties": false,
         "x-owner": "M5",
         "x-database": "S2新增exam_questions；不是assignments的私有答案视图",
-        "x-business-rules": []
+        "x-business-rules": [],
+        "example": {
+          "id": "question_11111111111111111111111111111111",
+          "paper_id": "exam_11111111111111111111111111111111",
+          "order": 1,
+          "stem": "用自己的话解释函数极限的含义。",
+          "question_type": "short_answer",
+          "options": [],
+          "max_score": 100
+        }
       },
       "ChapterContent": {
         "type": "object",
@@ -22870,13 +22958,22 @@
               "course_id": "course_11111111111111111111111111111111",
               "class_id": "class_11111111111111111111111111111111",
               "chapter_id": null,
-              "title": "高等数学第一章复习",
-              "description": null,
+              "title": "极限概念练习",
+              "description": "以下哪项符合题意？",
               "question_type": "single_choice",
-              "options": [],
+              "options": [
+                {
+                  "key": "A",
+                  "text": "合成选项甲"
+                },
+                {
+                  "key": "B",
+                  "text": "合成选项乙"
+                }
+              ],
               "max_score": 100,
               "due_at": null,
-              "published_at": null,
+              "published_at": "2026-10-27T01:00:00Z",
               "teacher_id": "user_11111111111111111111111111111111",
               "created_at": "2026-10-27T01:00:00Z",
               "updated_at": "2026-10-27T01:00:00Z"
@@ -23665,8 +23762,8 @@
         "example": {
           "items": [
             {
-              "id": "resource_11111111111111111111111111111111",
-              "config_key": "合成示例",
+              "id": "config_11111111111111111111111111111111",
+              "config_key": "session_policy",
               "version": 1,
               "status": "draft",
               "created_at": "2026-10-27T01:00:00Z",
@@ -23953,11 +24050,11 @@
         "example": {
           "items": [
             {
-              "id": "resource_11111111111111111111111111111111",
+              "id": "question_11111111111111111111111111111111",
               "paper_id": "exam_11111111111111111111111111111111",
               "order": 1,
-              "stem": "合成示例",
-              "question_type": "single_choice",
+              "stem": "用自己的话解释函数极限的含义。",
+              "question_type": "short_answer",
               "options": [],
               "max_score": 100
             }

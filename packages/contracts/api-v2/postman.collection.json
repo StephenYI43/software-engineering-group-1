@@ -1768,7 +1768,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"student_user_id\": \"user_11111111111111111111111111111111\",\n    \"status\": \"pending\",\n    \"message\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"student_user_id\": \"user_11111111111111111111111111111111\",\n    \"status\": \"approved\",\n    \"message\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -1918,7 +1918,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"resource_11111111111111111111111111111111\",\n        \"course_id\": \"course_11111111111111111111111111111111\",\n        \"class_id\": \"class_11111111111111111111111111111111\",\n        \"chapter_id\": null,\n        \"title\": \"高等数学第一章复习\",\n        \"description\": null,\n        \"question_type\": \"single_choice\",\n        \"options\": [],\n        \"max_score\": 100,\n        \"due_at\": null,\n        \"published_at\": null,\n        \"teacher_id\": \"user_11111111111111111111111111111111\",\n        \"created_at\": \"2026-10-27T01:00:00Z\",\n        \"updated_at\": \"2026-10-27T01:00:00Z\"\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"resource_11111111111111111111111111111111\",\n        \"course_id\": \"course_11111111111111111111111111111111\",\n        \"class_id\": \"class_11111111111111111111111111111111\",\n        \"chapter_id\": null,\n        \"title\": \"极限概念练习\",\n        \"description\": \"以下哪项符合题意？\",\n        \"question_type\": \"single_choice\",\n        \"options\": [\n          {\n            \"key\": \"A\",\n            \"text\": \"合成选项甲\"\n          },\n          {\n            \"key\": \"B\",\n            \"text\": \"合成选项乙\"\n          }\n        ],\n        \"max_score\": 100,\n        \"due_at\": null,\n        \"published_at\": \"2026-10-27T01:00:00Z\",\n        \"teacher_id\": \"user_11111111111111111111111111111111\",\n        \"created_at\": \"2026-10-27T01:00:00Z\",\n        \"updated_at\": \"2026-10-27T01:00:00Z\"\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -2011,7 +2011,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"chapter_id\": null,\n    \"title\": \"高等数学第一章复习\",\n    \"description\": null,\n    \"question_type\": \"single_choice\",\n    \"options\": [],\n    \"max_score\": 100,\n    \"due_at\": null,\n    \"published_at\": null,\n    \"teacher_id\": \"user_11111111111111111111111111111111\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"chapter_id\": null,\n    \"title\": \"极限概念练习\",\n    \"description\": \"以下哪项符合题意？\",\n    \"question_type\": \"single_choice\",\n    \"options\": [\n      {\n        \"key\": \"A\",\n        \"text\": \"合成选项甲\"\n      },\n      {\n        \"key\": \"B\",\n        \"text\": \"合成选项乙\"\n      }\n    ],\n    \"max_score\": 100,\n    \"due_at\": null,\n    \"published_at\": \"2026-10-27T01:00:00Z\",\n    \"teacher_id\": \"user_11111111111111111111111111111111\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -2068,7 +2068,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"chapter_id\": null,\n    \"title\": \"高等数学第一章复习\",\n    \"description\": null,\n    \"question_type\": \"single_choice\",\n    \"options\": [],\n    \"max_score\": 100,\n    \"due_at\": null,\n    \"published_at\": null,\n    \"teacher_id\": \"user_11111111111111111111111111111111\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"chapter_id\": null,\n    \"title\": \"极限概念练习\",\n    \"description\": \"以下哪项符合题意？\",\n    \"question_type\": \"single_choice\",\n    \"options\": [\n      {\n        \"key\": \"A\",\n        \"text\": \"合成选项甲\"\n      },\n      {\n        \"key\": \"B\",\n        \"text\": \"合成选项乙\"\n      }\n    ],\n    \"max_score\": 100,\n    \"due_at\": null,\n    \"published_at\": \"2026-10-27T01:00:00Z\",\n    \"teacher_id\": \"user_11111111111111111111111111111111\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -2169,7 +2169,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"chapter_id\": null,\n    \"title\": \"高等数学第一章复习\",\n    \"description\": null,\n    \"question_type\": \"single_choice\",\n    \"options\": [],\n    \"max_score\": 100,\n    \"due_at\": null,\n    \"published_at\": null,\n    \"teacher_id\": \"user_11111111111111111111111111111111\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"chapter_id\": null,\n    \"title\": \"极限概念练习\",\n    \"description\": \"以下哪项符合题意？\",\n    \"question_type\": \"single_choice\",\n    \"options\": [\n      {\n        \"key\": \"A\",\n        \"text\": \"合成选项甲\"\n      },\n      {\n        \"key\": \"B\",\n        \"text\": \"合成选项乙\"\n      }\n    ],\n    \"max_score\": 100,\n    \"due_at\": \"2026-11-03T01:00:00Z\",\n    \"published_at\": \"2026-10-27T01:00:00Z\",\n    \"teacher_id\": \"user_11111111111111111111111111111111\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -2635,7 +2635,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"assignment_id\": \"assignment_11111111111111111111111111111111\",\n    \"student_id\": \"user_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"answer\": {\n      \"options\": [\n        \"B\"\n      ]\n    },\n    \"is_correct\": null,\n    \"score\": null,\n    \"graded_by\": null,\n    \"graded_at\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"assignment_id\": \"assignment_11111111111111111111111111111111\",\n    \"student_id\": \"user_11111111111111111111111111111111\",\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"answer\": {\n      \"options\": [\n        \"B\"\n      ]\n    },\n    \"is_correct\": false,\n    \"score\": 0,\n    \"graded_by\": null,\n    \"graded_at\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -2728,7 +2728,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"student_id\": \"user_11111111111111111111111111111111\",\n    \"course_id\": null,\n    \"source\": \"manual\",\n    \"status\": \"unresolved\",\n    \"question\": {\n      \"stem\": \"合成示例\",\n      \"question_type\": \"single_choice\",\n      \"options\": []\n    },\n    \"student_answer\": null,\n    \"source_turn_id\": null,\n    \"submission_id\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"student_id\": \"user_11111111111111111111111111111111\",\n    \"course_id\": null,\n    \"source\": \"manual\",\n    \"status\": \"unresolved\",\n    \"question\": {\n      \"stem\": \"合成示例\",\n      \"question_type\": \"single_choice\",\n      \"options\": []\n    },\n    \"student_answer\": null,\n    \"source_turn_id\": \"turn_11111111111111111111111111111111\",\n    \"submission_id\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -3053,7 +3053,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"resource_11111111111111111111111111111111\",\n        \"course_id\": \"course_11111111111111111111111111111111\",\n        \"class_id\": \"class_11111111111111111111111111111111\",\n        \"chapter_id\": null,\n        \"title\": \"高等数学第一章复习\",\n        \"description\": null,\n        \"question_type\": \"single_choice\",\n        \"options\": [],\n        \"max_score\": 100,\n        \"due_at\": null,\n        \"published_at\": null,\n        \"teacher_id\": \"user_11111111111111111111111111111111\",\n        \"created_at\": \"2026-10-27T01:00:00Z\",\n        \"updated_at\": \"2026-10-27T01:00:00Z\"\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"resource_11111111111111111111111111111111\",\n        \"course_id\": \"course_11111111111111111111111111111111\",\n        \"class_id\": \"class_11111111111111111111111111111111\",\n        \"chapter_id\": null,\n        \"title\": \"极限概念练习\",\n        \"description\": \"以下哪项符合题意？\",\n        \"question_type\": \"single_choice\",\n        \"options\": [\n          {\n            \"key\": \"A\",\n            \"text\": \"合成选项甲\"\n          },\n          {\n            \"key\": \"B\",\n            \"text\": \"合成选项乙\"\n          }\n        ],\n        \"max_score\": 100,\n        \"due_at\": null,\n        \"published_at\": \"2026-10-27T01:00:00Z\",\n        \"teacher_id\": \"user_11111111111111111111111111111111\",\n        \"created_at\": \"2026-10-27T01:00:00Z\",\n        \"updated_at\": \"2026-10-27T01:00:00Z\"\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -3361,7 +3361,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"student_id\": \"user_11111111111111111111111111111111\",\n    \"title\": \"高等数学第一章复习\",\n    \"course_id\": null,\n    \"source\": \"manual\",\n    \"source_turn_id\": null,\n    \"status\": \"active\",\n    \"items\": [],\n    \"due_at\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"student_id\": \"user_11111111111111111111111111111111\",\n    \"title\": \"第一章复习计划\",\n    \"course_id\": null,\n    \"source\": \"manual\",\n    \"source_turn_id\": null,\n    \"status\": \"active\",\n    \"items\": [],\n    \"due_at\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -3555,7 +3555,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"plan_id\": \"plan_11111111111111111111111111111111\",\n    \"content\": \"先回顾极限定义，再尝试一道基础题。\",\n    \"order\": 1,\n    \"status\": \"pending\",\n    \"chapter_id\": null,\n    \"knowledge_point\": null,\n    \"due_at\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"plan_id\": \"plan_11111111111111111111111111111111\",\n    \"content\": \"先回顾极限定义，再尝试一道基础题。\",\n    \"order\": 1,\n    \"status\": \"done\",\n    \"chapter_id\": null,\n    \"knowledge_point\": null,\n    \"due_at\": null,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -4846,7 +4846,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"document_id\": \"doc_11111111111111111111111111111111\",\n    \"user_id\": null,\n    \"class_id\": null,\n    \"granted_at\": \"2026-10-27T01:00:00Z\",\n    \"revoked_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"document_id\": \"doc_11111111111111111111111111111111\",\n    \"user_id\": null,\n    \"class_id\": \"class_11111111111111111111111111111111\",\n    \"granted_at\": \"2026-10-27T01:00:00Z\",\n    \"revoked_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -5735,7 +5735,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"config_version_id\": \"config_11111111111111111111111111111111\",\n    \"auto_play\": false,\n    \"volume\": 0,\n    \"speech_rate\": 0.5,\n    \"subtitles_enabled\": false,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"config_version_id\": \"config_11111111111111111111111111111111\",\n    \"auto_play\": false,\n    \"volume\": 0.8,\n    \"speech_rate\": 0.5,\n    \"subtitles_enabled\": false,\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"updated_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -5929,7 +5929,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"utterance_id\": \"playback_11111111111111111111111111111111\",\n    \"status\": \"started\",\n    \"stop_reason\": null,\n    \"started_at\": \"2026-10-27T01:00:00Z\",\n    \"ended_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"utterance_id\": \"playback_11111111111111111111111111111111\",\n    \"status\": \"completed\",\n    \"stop_reason\": null,\n    \"started_at\": \"2026-10-27T01:00:00Z\",\n    \"ended_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -6180,7 +6180,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": null,\n    \"status\": \"running\",\n    \"started_at\": \"2026-10-27T01:00:00Z\",\n    \"ended_at\": null,\n    \"duration_seconds\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": null,\n    \"status\": \"completed\",\n    \"started_at\": \"2026-10-27T01:00:00Z\",\n    \"ended_at\": null,\n    \"duration_seconds\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -6959,7 +6959,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"resource_11111111111111111111111111111111\",\n        \"config_key\": \"合成示例\",\n        \"version\": 1,\n        \"status\": \"draft\",\n        \"created_at\": \"2026-10-27T01:00:00Z\",\n        \"activated_at\": null,\n        \"retired_at\": null\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"config_11111111111111111111111111111111\",\n        \"config_key\": \"session_policy\",\n        \"version\": 1,\n        \"status\": \"draft\",\n        \"created_at\": \"2026-10-27T01:00:00Z\",\n        \"activated_at\": null,\n        \"retired_at\": null\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -7052,7 +7052,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"config_key\": \"合成示例\",\n    \"version\": 1,\n    \"status\": \"draft\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"activated_at\": null,\n    \"retired_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"config_11111111111111111111111111111111\",\n    \"config_key\": \"session_policy\",\n    \"version\": 1,\n    \"status\": \"draft\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"activated_at\": null,\n    \"retired_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -7153,7 +7153,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"config_key\": \"合成示例\",\n    \"version\": 1,\n    \"status\": \"draft\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"activated_at\": null,\n    \"retired_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"config_11111111111111111111111111111111\",\n    \"config_key\": \"session_policy\",\n    \"version\": 1,\n    \"status\": \"active\",\n    \"created_at\": \"2026-10-27T01:00:00Z\",\n    \"activated_at\": \"2026-10-27T01:00:00Z\",\n    \"retired_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -7782,7 +7782,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"title\": \"高等数学第一章复习\",\n    \"duration_minutes\": 1,\n    \"question_count\": 1,\n    \"published_at\": null\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"id\": \"resource_11111111111111111111111111111111\",\n    \"course_id\": \"course_11111111111111111111111111111111\",\n    \"title\": \"高等数学第一章复习\",\n    \"duration_minutes\": 1,\n    \"question_count\": 1,\n    \"published_at\": \"2026-10-27T01:00:00Z\"\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },
@@ -7839,7 +7839,7 @@
               "value": "application/json"
             }
           ],
-          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"resource_11111111111111111111111111111111\",\n        \"paper_id\": \"exam_11111111111111111111111111111111\",\n        \"order\": 1,\n        \"stem\": \"合成示例\",\n        \"question_type\": \"single_choice\",\n        \"options\": [],\n        \"max_score\": 100\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
+          "body": "{\n  \"code\": 0,\n  \"message\": \"ok\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"question_11111111111111111111111111111111\",\n        \"paper_id\": \"exam_11111111111111111111111111111111\",\n        \"order\": 1,\n        \"stem\": \"用自己的话解释函数极限的含义。\",\n        \"question_type\": \"short_answer\",\n        \"options\": [],\n        \"max_score\": 100\n      }\n    ],\n    \"total\": 1,\n    \"page\": 1,\n    \"page_size\": 20\n  },\n  \"trace_id\": \"req_11111111111111111111111111111111\"\n}\n"
         }
       ]
     },

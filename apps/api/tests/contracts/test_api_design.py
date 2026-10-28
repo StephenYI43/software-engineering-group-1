@@ -162,6 +162,21 @@ def test_exam_draft_requires_teacher_checked_questions_and_hides_answer_key():
     assert not validates("ExamQuestion", question)
 
 
+def test_saved_write_examples_preserve_input_fields_and_private_answers():
+    by_request = {op["request"]: op for op in CATALOG if op["method"] == "POST"}
+    for request, fields in {
+        "ConfigCreate": ["config_key"],
+        "AssignmentCreate": ["title", "description", "options", "question_type"],
+        "CourseCreate": ["title", "subject"],
+    }.items():
+        op = by_request[request]
+        for field in fields:
+            assert op["response_example"]["data"][field] == op["request_example"][field]
+    assignment = by_request["AssignmentCreate"]["response_example"]["data"]
+    assert "answer_key" not in assignment
+    assert assignment["published_at"] is not None
+
+
 def test_unknown_metric_is_not_a_zero_value():
     assert validates("MetricNumber", {"state": "unknown", "reason": "no_events_in_period"})
     assert validates("MetricNumber", {"state": "known", "value": 0})
