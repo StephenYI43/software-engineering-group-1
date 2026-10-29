@@ -9,7 +9,7 @@
 
 `POST /api/v1/tutoring/sessions/{sessionId}/messages`
 
-> 路径形状待 M2 确认，见 README.md「仍待团队拍板」第 2 条。
+> 路径形状已由 M2 确认，见 README.md「已确认事项」。
 
 ```json
 {
@@ -129,17 +129,16 @@
    M2 在 `isMock=true` 时应显示明确标识，不得呈现为真实模型结果。
 7. **`stage` 不得由模型输出决定**，只能由服务端状态机计算。
 
-## emotion / action 取值（占位，待 M4 冻结）
+## emotion / action 取值
 
-> 这两组值**尚未确定**。`docs/tasks/m3.md:23` 与 `docs/tasks/m4.md:23` 对定义权互相矛盾。
-> 下表仅为占位，用于让样例可读。**M4 给出正式枚举前，本契约不是最终版。**
+取值全集以已合并的 [M4 数字人契约](../avatar/avatar-controller.md) 为唯一来源，以下为同步说明。
 
-| 字段 | 占位取值 |
+| 字段 | 已冻结取值 |
 | --- | --- |
 | `emotion` | `neutral` / `encouraging` / `thinking` / `celebrating` |
 | `action` | `idle` / `nod` / `point` / `write` |
 
-建议的分工（待确认）：**M4 定义枚举取值**（他们知道形象能渲染什么），
+既有分工：**M4 定义枚举取值**（他们知道形象能渲染什么），
 **M3 定义教学情境到取值的映射**并校验模型输出是否落在 M4 的枚举内。
 
 ## ID 约定（待 M1 的共享基础契约确认）

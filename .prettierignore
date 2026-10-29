@@ -21,3 +21,6 @@ apps/api
 docs
 packages/contracts
 .github
+
+# Deterministic contract generator owns this file; API CI checks source drift.
+apps/web/src/generated/api-v2.ts

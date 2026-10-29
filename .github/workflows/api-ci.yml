@@ -38,3 +38,9 @@ jobs:
         run: uv run --locked mypy
       - name: Tests
         run: uv run --locked pytest
+      - name: Generated contract consistency
+        run: uv run --locked python ../../scripts/api-design/build_contracts.py --check
+      - name: Contract tool quality
+        run: |
+          uv run --locked ruff check ../../scripts/api-design
+          uv run --locked ruff format --check ../../scripts/api-design
