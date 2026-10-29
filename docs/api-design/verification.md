@@ -11,6 +11,13 @@
 - Web的pnpm format:check、typecheck、lint、test（5个文件31项）及build实际通过。生成的v2类型独立且未导入旧客户端。
 - 现有依赖发出Starlette/httpx和AnyIO兼容别名两项弃用警告，无失败；本任务未为消除警告改动已锁定运行依赖。
 
+## 正式文档校验
+
+- `第一组 接口设计.docx`保留老师模板的三章结构及原样式/主题/字体/编号；技术参数表、代码段与页码是已记录的扩展。模板及老师PPT原件SHA256保持不变。
+- 2026-10-29完成WPS COM文件接口只读导出与Poppler渲染，158页逐页检查，未见文字截断、重叠、空白页或表格越界；跨页表格重复表头。未使用Computer Use或Microsoft Word自动化。
+- DOCX结构核对：114个操作锚点、135个独立数据结构、548项模型字段、266处内部链接全部可解析，487张表未设固定行高且字段行不拆页。分页/响应封套复用公共结构，不重复罗列。
+- 文档对应OpenAPI SHA256为`b000f9dc9fdd238920370a71544f2b111ead610aacafc641e99e4a173deef956`；DOCX SHA256为`ffbeb6a501bb7eb18aca630f6b77ba5fc864187bb89e98184f802e155d3aefb4`。规范化渲染脚本因本机缺少soffice.exe无法使用，已采用上述WPS接口替代并完成视觉与结构双重校验。
+
 ## 复跑
 
 ```powershell
