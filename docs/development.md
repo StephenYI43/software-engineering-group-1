@@ -1,6 +1,8 @@
-# M1 首次开发：API 启动与验证
+# 平台 API 启动与验证
 
-对应 [Issue #11](https://github.com/StephenYI43/software-engineering-group-1/issues/11)。此阶段只有 API 骨架，未实现登录、课程、数据库连接、数字人或 AI 服务。
+在 #11 骨架上已增量实现 #45 登录与 #48 PostgreSQL 平台数据底座。
+课程/数字人/真实AI尚未接入主应用。
+数据库启动、迁移、seed与重启验证见 [平台数据库指南](data-model/platform-verification.md)。
 
 ## 环境
 
@@ -18,14 +20,15 @@ uv sync --locked
 uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-访问 http://127.0.0.1:8000/api/v1/health；开发文档 http://127.0.0.1:8000/docs。退出用 Ctrl+C。无需 .env、模型密钥或数据库。
+访问 http://127.0.0.1:8000/api/v1/health；开发文档 http://127.0.0.1:8000/docs。退出用 Ctrl+C。
+未配置DATABASE_URL时保留无需数据库的离线演示；配置后账号与会话必须使用PostgreSQL，不回退演示账号。
 
 ## 登录（Issue #45，无需数据库）
 
 内置三个合成演示账号：
 
-| 账号 | 密码 | 角色 |
-| --- | --- | --- |
+| 账号     | 密码           | 角色 |
+| -------- | -------------- | ---- |
 | student1 | demo-student-1 | 学生 |
 | student2 | demo-student-2 | 学生 |
 | teacher1 | demo-teacher-1 | 教师 |
@@ -60,4 +63,5 @@ GitHub API CI 在所有 PR、main 推送和手动触发时执行同一组检查�
 
 ## 下一次工作
 
-先评审 [平台契约](../packages/contracts/platform/README.md)，再实施身份认证与资源权限的小任务。M2/M6 可使用已批准的骨架，M3/M4/M5 继续各自契约和模块开发。不要把 /health 成功视为能安全处理真实学生数据。
+下一步实施 #16 课程/班级授权与各域数据库接入。模型注册/Base/Session/迁移约定见数据库指南，
+不要另建一套连接或用户表。/health只验证进程存活，不代表数据库或真实学生业务就绪。
