@@ -63,11 +63,13 @@ class SessionAuthority:
     def parse(self, token: str) -> SessionUser | None:
         """Return the identity a valid token carries, or `None` if unusable."""
         try:
-            claims: dict[str, Any] = jwt.decode(token, self._secret, algorithms=["HS256"])
+            claims: dict[str, Any] = jwt.decode(
+                token, self._secret, algorithms=["HS256"], options={"require": ["exp", "jti"]}
+            )
         except jwt.PyJWTError:
             return None
         jti = claims.get("jti")
-        if isinstance(jti, str) and jti in self._denied_jtis:
+        if not isinstance(jti, str) or not jti or jti in self._denied_jtis:
             return None
         user_id = claims.get("sub")
         role = claims.get("role")
