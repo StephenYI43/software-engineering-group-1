@@ -36,6 +36,7 @@ from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement, delete, select, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.domains.analytics import events as ev
@@ -124,7 +125,7 @@ class AnalyticsPgWorker:
                         quarantined=quarantined,
                         last_observed_at=last_observed,
                     )
-            except RuntimeError as error:
+            except SQLAlchemyError as error:
                 if _is_lock_unavailable(error):
                     raise ConsumerBusy(consumer_key) from error
                 raise
@@ -385,9 +386,18 @@ class AnalyticsPgWorker:
             row.error_code = error_code
 
 
-def _is_lock_unavailable(error: RuntimeError) -> bool:
+def _is_lock_unavailable(error: SQLAlchemyError) -> bool:
+    """PostgreSQL 55P03（lock_not_available）：NOWAIT 未立即拿到行锁。
+
+    判断兼容驱动差异：优先异常类名，其次 pgcode，最后消息文本（本地化消息不可靠）。
+    """
+    original: Any = getattr(error, "orig", None)
+    if type(original).__name__.lower() == "locknotavailable":
+        return True
+    if getattr(original, "pgcode", None) == "55P03":
+        return True
     text = str(error).lower()
-    return "could not obtain lock" in text or "nowait" in text
+    return "could not obtain lock" in text or "55p03" in text
 
 
 def _null_safe(column: Any, value: str | None) -> ColumnElement[bool]:

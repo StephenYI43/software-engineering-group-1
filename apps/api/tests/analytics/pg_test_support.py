@@ -3,8 +3,9 @@
 仅当 ``TEST_DATABASE_URL`` 指向**显式可丢弃的临时 PostgreSQL 测试库**时启用；
 未设置则整模块 skip（CI 由 #75 的容器夹具提供该变量；本地未实测须如实标注）。
 
-users / courses / classes / learning_events 的权威模型归 M1/M5（#75 底座），
-此处仅按 schema.sql（#79）建**测试所需最小列**，不含任何应用迁移。
+users / courses / classes 的权威模型归 M1/M5（#75 底座）。此处仅注册**测试所需
+最小列**到测试进程的 ``AnalyticsBase.metadata``（使 ORM 外键可解析、约束在测试库
+真实生效），不写入任何应用模块、不生成迁移。
 """
 
 from __future__ import annotations
@@ -15,32 +16,34 @@ from datetime import datetime
 from typing import Any
 
 import pytest
-from sqlalchemy import Column, MetaData, String, Table, create_engine, text
+from sqlalchemy import Column, String, Table, UniqueConstraint, create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.domains.analytics.pg_models import AnalyticsBase, learning_events_table
+from app.domains.analytics.pg_consumer import AnalyticsPgWorker
+from app.domains.analytics.pg_models import AnalyticsBase, learning_events
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "")
 
-_LITE_NAMING = {
-    "ix": "ix_%(table_name)s_%(column_0_name)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s",
-}
-
-_lite_metadata = MetaData(naming_convention=_LITE_NAMING)
-"""测试专用最小上游表（users/courses/classes）；不属于应用 metadata。"""
-
-users_table = Table("users", _lite_metadata, Column("id", String(64), primary_key=True))
-courses_table = Table("courses", _lite_metadata, Column("id", String(64), primary_key=True))
+users_table = Table(
+    "users",
+    AnalyticsBase.metadata,
+    Column("id", String(64), primary_key=True),
+    extend_existing=True,
+)
+courses_table = Table(
+    "courses",
+    AnalyticsBase.metadata,
+    Column("id", String(64), primary_key=True),
+    extend_existing=True,
+)
 classes_table = Table(
     "classes",
-    _lite_metadata,
+    AnalyticsBase.metadata,
     Column("id", String(64), primary_key=True),
     Column("course_id", String(64), nullable=False),
+    UniqueConstraint("id", "course_id"),  # schema.sql:170——复合 FK(class_id,course_id) 的引用目标
+    extend_existing=True,
 )
 
 
@@ -58,7 +61,6 @@ def create_schema(engine: Engine) -> None:
             "DROP TABLE IF EXISTS users CASCADE",
         ):
             conn.execute(text(ddl))
-    _lite_metadata.create_all(engine)
     AnalyticsBase.metadata.create_all(engine)
 
 
@@ -82,10 +84,9 @@ def insert_event(
     payload: dict[str, Any],
 ) -> None:
     """向 M5 只读 feed 表插入一条合成事件（trace_id 满足 req_+32hex CHECK）。"""
-    table = learning_events_table()
     with engine.begin() as conn:
         conn.execute(
-            table.insert(),
+            learning_events.insert(),
             {
                 "id": event_id,
                 "event_type": event_type,
@@ -100,10 +101,8 @@ def insert_event(
         )
 
 
-def make_worker(engine: Engine) -> tuple[Any, sessionmaker[Session]]:
+def make_worker(engine: Engine) -> tuple[AnalyticsPgWorker, sessionmaker[Session]]:
     """构造独立 engine 的 worker（重启测试用两个 engine 模拟进程重启）。"""
-    from app.domains.analytics.pg_consumer import AnalyticsPgWorker
-
     factory: sessionmaker[Session] = sessionmaker(engine, expire_on_commit=False)
     return AnalyticsPgWorker(factory), factory
 

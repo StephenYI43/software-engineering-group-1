@@ -200,11 +200,7 @@ class AnalyticsQuarantinedEvent(AnalyticsBase):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-def learning_events_table() -> Any:
-    """M5 ``learning_events`` 的只读 Core 表（消费查询用；权威 DDL 见 schema.sql 400-428 行）。
-
-    返回 ``Table`` 而非 ORM 模型：analytics 只 ``SELECT`` 该表，写入归 M5。
-    """
+def _build_learning_events() -> Any:
     from sqlalchemy import Column, Table, text
 
     return Table(
@@ -224,3 +220,12 @@ def learning_events_table() -> Any:
         Column("request_hash", String(64)),
         CheckConstraint("class_id IS NULL OR course_id IS NOT NULL", name="class_requires_course"),
     )
+
+
+learning_events = _build_learning_events()
+"""M5 ``learning_events`` 的只读 Core 表（模块级注册，保证 FK 在 create_all 前可解析）。"""
+
+
+def learning_events_table() -> Any:
+    """兼容入口：返回模块级只读 Core 表。"""
+    return learning_events

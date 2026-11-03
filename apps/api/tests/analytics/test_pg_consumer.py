@@ -27,7 +27,12 @@ from app.domains.analytics.pg_models import (
     AnalyticsProcessedEvent,
     AnalyticsQuarantinedEvent,
 )
-from tests.analytics.pg_test_support import insert_event, make_worker, requires_pg, seed_identity
+from tests.analytics.pg_test_support import (  # noqa: F401
+    insert_event,
+    make_worker,
+    requires_pg,
+    seed_identity,
+)
 
 pytestmark = [requires_pg]
 
@@ -35,6 +40,7 @@ COURSE = "course_" + "1" * 32
 CLASS_A = "class_" + "a" * 32
 CLASS_B = "class_" + "b" * 32
 STUDENT = "user_" + "a" * 32
+RESOLVER = "user_" + "e" * 32
 BASE = datetime(2026, 11, 2, 2, 0, tzinfo=UTC)  # 上海本地 10:00
 
 
@@ -286,39 +292,46 @@ def test_poison_event_quarantine_and_replay(pg_engine: Engine) -> None:
 
 
 def test_poison_event_resolved_on_success_replay(pg_engine: Engine) -> None:
-    """重放成功路径：隔离表可放行且成功时 ledger+聚合+resolved 同事务。
+    """重放成功路径：retry_ready 后事件可校验，ledger+聚合+resolved 同事务。
 
-    源事件不可变，因此成功重放要求上游修复事件内容。测试直接更新 feed 行
-    模拟 M5 修复动作（测试库内合成数据；生产按 M5 流程）。
+    源事件在生产不可变；重放成功的现实路径是消费侧算法修复或上游受控重放。
+    测试以「上游修复事件类型」为合成替身（事件 id 保持不变）。
     """
-    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT])
-    bad_id = "bad_event2"
+    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT, RESOLVER])
+    bad_id = "event_" + "c" * 32
     insert_event(
         pg_engine,
         event_id=bad_id,
-        event_type="chapter_viewed",
+        event_type="bogus_type",
         user_id=STUDENT,
         course_id=COURSE,
         class_id=CLASS_A,
         occurred_at=BASE,
         payload={"chapterId": "c1"},
-    )
-    with pg_engine.begin() as conn:  # 模拟上游契约违约
-        conn.execute(text("UPDATE learning_events SET id = 'broken' WHERE id = :i"), {"i": bad_id})
+    )  # 未知事件类型：契约外毒事件
     worker = _worker(pg_engine)
     assert worker.poll_once("teacher-overview", "v1").quarantined == 1
-    with pg_engine.begin() as conn:  # M5 修复事件内容（测试内合成模拟）
+    with Session(pg_engine) as s, s.begin():
+        q = s.execute(select(AnalyticsQuarantinedEvent)).scalar_one()
+        assert q.status == "open" and q.event_id == bad_id
+    with pg_engine.begin() as conn:  # 受控重放前的上游修复（合成替身；id 不变）
         conn.execute(
-            text("UPDATE learning_events SET id = :new WHERE id = 'broken'"),
-            {"new": "event_" + "c" * 32},
+            text("UPDATE learning_events SET event_type = 'chapter_viewed' WHERE id = :i"),
+            {"i": bad_id},
         )
-    assert worker.retry_quarantined("teacher-overview", "v1", "broken", "user_" + "e" * 32)
+    assert worker.retry_quarantined("teacher-overview", "v1", bad_id, RESOLVER)
     result = worker.poll_once("teacher-overview", "v1")
     assert result.applied == 1 and result.quarantined == 0
     with Session(pg_engine) as s, s.begin():
         q = s.execute(select(AnalyticsQuarantinedEvent)).scalar_one()
         assert q.status == "resolved" and q.resolved_at is not None
-        assert q.resolved_by_user_id == "user_" + "e" * 32
+        assert q.resolved_by_user_id == RESOLVER
+        ledger = s.execute(
+            select(AnalyticsProcessedEvent.event_id).where(
+                AnalyticsProcessedEvent.consumer_id == _consumer_id(s)
+            )
+        ).scalar_one()
+        assert ledger == bad_id  # 账本与 resolved 同事务落库
 
 
 def test_rollback_leaves_no_partial_state(pg_engine: Engine) -> None:
@@ -352,15 +365,17 @@ def test_consumer_row_lock_serializes(pg_engine: Engine) -> None:
     worker = _worker(pg_engine)
     worker.poll_once("teacher-overview", "v1")  # 确保 consumer 行已存在
     blocker = create_engine(pg_engine.url.render_as_string(hide_password=False))
+    outer = None
     try:
         outer = blocker.connect()
         outer.begin()
         outer.execute(text("SELECT id FROM analytics_consumers FOR UPDATE NOWAIT"))
         with pytest.raises(ConsumerBusy):
             worker.poll_once("teacher-overview", "v1")
-        outer.rollback()
-        outer.close()
     finally:
+        if outer is not None:
+            outer.rollback()  # 无条件释放行锁，避免泄漏阻塞后续测试
+            outer.close()
         blocker.dispose()
 
 

@@ -5,6 +5,9 @@
 此处复制一份是为了让后端测试不依赖 docs 目录（该文件已合并进 main；
 后端测试保留一份独立副本，避免跨目录依赖）。
 两处若出现差异，以本文件为准并同步更新 S0 样例。
+
+真实 PG 集成夹具（``pg_engine``）定义在 ``pg_test_support``，
+经本文件导入注册，供 ``test_pg_consumer`` 使用。
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from app.domains.analytics.period import Period, PeriodQuery, resolve_period
 from app.domains.analytics.ports import StudentRef
 from app.domains.analytics.service import AnalyticsConsumer
 from app.domains.analytics.state import AnalyticsState
+from tests.analytics.pg_test_support import pg_engine as pg_engine  # noqa: F401
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
