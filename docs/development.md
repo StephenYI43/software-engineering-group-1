@@ -37,6 +37,10 @@ Invoke-RestMethod http://127.0.0.1:8000/api/v1/auth/login -Method Post -ContentT
 
 会话 token 为 HS256，默认 24 小时过期（`AUTH_SESSION_TTL_SECONDS`）；`/api/v1/auth/logout` 以进程内吊销列表使其失效，**重启后失效列表清空**，属 S1 已知口径。签名密钥默认值**仅限演示**，任何非演示用途必须通过 `AUTH_SESSION_SECRET` 覆盖；合成账号可用 `AUTH_SYNTHETIC_ACCOUNTS`（JSON 数组）整体替换，参考 `.env.example`。
 
+Web 联调时保持 API 运行，在另一个终端从仓库根目录执行 `pnpm dev`，然后打开 Vite 地址下的 `/login`。默认代理到 API 的 8000 端口。如果端口被占用，可在 API 启动命令中改用 `--port 18000`，并在启动 Vite 前把 `AUTH_API_PROXY_TARGET` 设为 `http://127.0.0.1:18000`。
+
+接真实登录供应商时，`web_origin` 必须与浏览器实际访问的 Vite 地址一致。先按 [扩展登录配置](../packages/contracts/platform/external-sign-in.md) 启用一种供应商，再验证授权回调、绑定账号与退出。
+
 Windows PowerShell 验证：
 
 ```powershell

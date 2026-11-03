@@ -50,7 +50,7 @@ OAuth 注册的回调 URL 指向 Web /login/{provider}，与 API 同源。Web �
 - 使用独立随机 `AUTH_SESSION_SECRET` 和显式本地账号列表 `AUTH_SYNTHETIC_ACCOUNTS`，绑定目标须是列表中的用户 ID。当前用于受控联调，只填写合成账号，禁止把真实绑定、账号或凭证写入仓库。
 - GitHub OAuth App 回调为 `<web_origin>/login/github`，微信开放平台网站应用回调为 `<web_origin>/login/wechat`，学校 OIDC 回调为 `<web_origin>/login/school`。学校当前支持 PKCE S256、`client_secret_basic` 和 RS256 单受众 ID Token，校方轮换签名公钥后需要更新配置。
 - 短信使用专用 Twilio Verify Service。向中国大陆号码发码前需要完成 [Twilio 用途审核及注册](https://help.twilio.com/articles/17024185400859-Use-Case-Vetting-for-Verify-Messages-to-China)。服务端仅向已经绑定的号码发码，单进程按手机号限制发码和校验频率，短信有效期和校验由供应商管理。
-- Vite 开发服务器代理 `/api/v1/auth` 到 `127.0.0.1:8000`。部署时需让 Web 和 API 同源，回调路径由 SPA 接管，日志避免记录回调查询参数或供应商请求详情。OAuth 流程暂存在单个 API 进程，重启后要重新开始。
+- Vite 开发服务器默认把 `/api/v1/auth` 代理到 `127.0.0.1:8000`。API 改端口时，在 Vite 进程环境中设置 `AUTH_API_PROXY_TARGET`。部署时需让 Web 和 API 同源，回调路径由 SPA 接管，日志避免记录回调查询参数或供应商请求详情。OAuth 流程暂存在单个 API 进程，重启后要重新开始。
 - 当前仍复用 S1 的会话签发与账号配置。待 PostgreSQL 底座与鉴权合入后，再将身份绑定、会话撤销和限流切换到共享存储。课程与答疑等既有 Mock 页面仍按各自联调任务接入。
 
 参考 [GitHub OAuth](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)、[微信网站应用登录](https://developers.weixin.qq.com/doc/oplatform/Website_App/WeChat_Login/Wechat_Login.html)、[OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html) 和 [Twilio Verify](https://www.twilio.com/docs/verify/api)。
