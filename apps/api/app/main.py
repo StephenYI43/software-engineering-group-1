@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel, Field
 
 from app.core.auth.dependencies import CourseAccess
+from app.core.auth.external import create_external_router
 from app.core.auth.router import create_auth_router
 from app.core.auth.settings import load_auth_settings
 from app.core.auth.tokens import SessionAuthority
@@ -33,6 +34,7 @@ def create_app(*, course_access: CourseAccess | None = None) -> FastAPI:
     application.state.session_authority = authority
     application.state.course_access = course_access
     application.include_router(create_auth_router(settings, authority))
+    application.include_router(create_external_router(settings, authority))
     install_error_handlers(application)
 
     @application.middleware("http")
@@ -48,6 +50,8 @@ def create_app(*, course_access: CourseAccess | None = None) -> FastAPI:
             )
             response = error_response(request, ApiError(500, "INTERNAL_ERROR", "服务暂不可用"))
         response.headers["X-Request-ID"] = request.state.request_id
+        if request.url.path.startswith("/api/v1/auth/"):
+            response.headers["Cache-Control"] = "no-store"
         return response
 
     @application.get("/api/v1/health", response_model=HealthResponse, tags=["platform"])

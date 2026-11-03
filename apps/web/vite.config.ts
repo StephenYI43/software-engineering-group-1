@@ -22,6 +22,7 @@ export default defineConfig({
     },
   },
   server: {
+    proxy: { '/api/v1/auth': 'http://127.0.0.1:8000' },
     // 允许 dev server 读取 apps/web 之外的 packages/ui 源码。
     fs: { allow: ['../..'] },
   },

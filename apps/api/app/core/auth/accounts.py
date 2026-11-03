@@ -105,8 +105,8 @@ def verify_credentials(
 ) -> SessionUser | None:
     """Match username/password with constant-time comparison on both fields."""
     for account in accounts:
-        if hmac.compare_digest(account.username, username) and hmac.compare_digest(
-            account.password, password
-        ):
+        if hmac.compare_digest(
+            account.username.encode(), username.encode()
+        ) and hmac.compare_digest(account.password.encode(), password.encode()):
             return account.session_user
     return None
