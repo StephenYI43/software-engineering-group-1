@@ -32,7 +32,8 @@ app.core.db.Database.sessions是唯一Session工厂，app.core.db.get_session是
 get_session只关闭/回滚，不自动commit；service用with database.sessions.begin()或注入Session.begin()明确事务。
 业务与learning_events必须用同一个Session/事务；repository不得自行commit。
 
-新增Alembic revision先经M5登记down_revision，首版为0001_platform；不得各自新建独立Base或另一个0001。
+迁移链为0001_platform → 0002_config_schema_version；后续领域revision由M5协调唯一down_revision。不得各自新建独立Base或另一个0001。
+0002收紧配置对象的schemaVersion：只接受JSON字符串"1.0"，拒绝缺失、JSON null及数值1.0。升级检查既有行；发现旧脏数据时整次事务失败，保留0001、原约束及历史记录。由配置owner核对真实版本并按授权流程修复后再升级，不自动补版本或删除记录。
 鉴权仍接#16真实principal；本底座不会授予默认课程权限。
 持久凭证复用DatabaseSessionStore(session,request_id)+SessionAuthority，不重写JWT。
 读取可使用普通Session，签发/撤销必须在调用方事务内完成。
@@ -80,3 +81,10 @@ API子进程停止后重新创建；pg_ctl仅对本次临时data目录fast resta
 这不是只换Session或在同一连接读回。本机没有Docker，因此Compose本机未运行；CI容器结果另记录。
 首轮完整测试62项通过、覆盖率96.01%，有2条既有上游弃用警告；后续最终结果以PR记录为准。
 本次平台通过不表示M2/M3/M4/M5/M6各域或完整课堂数据库报告已完成。
+
+
+## 2026-11-03：配置版本约束补强
+
+Windows原生PG17.11独立本机_test库，Python3.12.14，uv sync --locked --offline、ruff format --check、ruff check、mypy、pytest全通过。67项通过、无跳过、现有应用覆盖率96.01%，两项既有上游弃用警告。
+
+新增5项真实PG用例：拒绝缺键、JSON null、数值1.0和错误字符串；从0001验证历史非法数据使升级事务失败并保留版本/原始值，受控修正测试行后可升0002，合法配置原ID/内容不变。单head、空库升降级和Alembic模型检查继续通过。只改配置版本约束，不重写0001，不新增公共路由。此前API/PG进程重启证据见上节，本次增量测试没有重跑两进程演示。

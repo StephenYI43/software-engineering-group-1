@@ -152,7 +152,7 @@ class SystemConfigVersion(Base):
         CheckConstraint("status IN ('draft','active','retired')", name="status"),
         CheckConstraint("jsonb_typeof(value) = 'object'", name="value_object"),
         CheckConstraint(
-            "value ? 'schemaVersion' AND value ->> 'schemaVersion' = '1.0'",
+            """(value -> 'schemaVersion') IS NOT DISTINCT FROM '"1.0"'::jsonb""",
             name="schema_version",
         ),
         CheckConstraint(

@@ -143,7 +143,7 @@ auth_sessions按现有jti的摘要定位，不保存原始token，也不改变JW
 | config_key         | 配置项标识           | varchar(100)              | 否   | 无                        | 如upload_limits、session_policy；与version组合唯一          | UNIQUE(config_key,version)之一                       |
 | version            | 递增版本号           | integer                   | 否   | 无；服务端在锁/事务内生成 | CHECK version>0；不能并发MAX+1不加保护                      | UNIQUE(config_key,version)之一                       |
 | status             | 配置版本状态         | varchar(16)               | 否   | draft                     | CHECK IN(draft,active,retired)；同key至多一个active         | 部分UNIQUE(config_key) WHERE status=active           |
-| value              | 有版本的配置值       | jsonb                     | 否   | 无                        | 对象；schemaVersion必填；按config_key校验属性，不能任意JSON | 无（非键）                                           |
+| value              | 有版本的配置值       | jsonb                     | 否   | 无                        | 对象；schemaVersion必须为JSON字符串"1.0"（0002）；按config_key校验属性 | 无（非键）                                           |
 | created_by_user_id | 创建者；系统seed可空 | varchar(64)               | 是   | NULL                      | 非空须授权管理员                                            | FK→users.id；ON DELETE SET NULL；ON UPDATE NO ACTION |
 | created_at         | 版本创建时间         | timestamptz(6)            | 否   | CURRENT_TIMESTAMP         | UTC                                                         | 无（非键）                                           |
 | activated_at       | 发布时间             | timestamptz(6)            | 是   | NULL                      | draft时NULL；active时必须非空；发布/退役与audit同事务       | 无（非键）                                           |

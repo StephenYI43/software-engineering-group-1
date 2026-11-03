@@ -35,7 +35,7 @@ REQUEST_ID = "req_" + "1" * 32
 
 def test_migration_single_head_and_round_trip(database: Database) -> None:
     config = Config(str(ROOT / "alembic.ini"))
-    assert ScriptDirectory.from_config(config).get_heads() == ["0001_platform"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["0002_config_schema_version"]
     command.check(config)
     assert set(inspect(database.engine).get_table_names()) == {
         *Base.metadata.tables,
@@ -45,6 +45,68 @@ def test_migration_single_head_and_round_trip(database: Database) -> None:
     assert inspect(database.engine).get_table_names() == ["alembic_version"]
     command.upgrade(config, "head")
     command.check(config)
+
+
+@pytest.mark.parametrize(
+    "value", [{}, {"schemaVersion": None}, {"schemaVersion": 1.0}, {"schemaVersion": "2.0"}]
+)
+def test_config_rejects_missing_or_non_string_version(
+    database: Database, value: dict[str, object]
+) -> None:
+    with pytest.raises(IntegrityError) as failed, database.sessions.begin() as session:
+        session.add(
+            SystemConfigVersion(
+                id=new_id("config"),
+                config_key="test_version",
+                version=1,
+                value=value,
+            )
+        )
+    assert failed.value.orig.diag.constraint_name == "ck_system_config_versions_schema_version"
+
+
+def test_config_upgrade_rejects_legacy_null_without_rewriting_valid_rows(
+    database: Database,
+) -> None:
+    config = Config(str(ROOT / "alembic.ini"))
+    command.downgrade(config, "0001_platform")
+    valid_id, invalid_id = new_id("config"), new_id("config")
+    good = {"schemaVersion": "1.0", "sessionTtlSeconds": 3600}
+    with database.sessions.begin() as session:
+        session.add_all(
+            [
+                SystemConfigVersion(
+                    id=valid_id, config_key="session_policy", version=1, value=good
+                ),
+                SystemConfigVersion(
+                    id=invalid_id,
+                    config_key="session_policy",
+                    version=2,
+                    value={"schemaVersion": None},
+                ),
+            ]
+        )
+    try:
+        with pytest.raises(IntegrityError, match="ck_system_config_versions_schema_version"):
+            command.upgrade(config, "head")
+        with database.sessions() as session:
+            assert (
+                session.scalar(text("SELECT version_num FROM alembic_version")) == "0001_platform"
+            )
+            assert session.get(SystemConfigVersion, valid_id).value == good
+            assert session.get(SystemConfigVersion, invalid_id).value == {"schemaVersion": None}
+    finally:
+        with database.sessions.begin() as session:
+            session.execute(
+                text("DELETE FROM system_config_versions WHERE id=:id"), {"id": invalid_id}
+            )
+        command.upgrade(config, "head")
+    with database.sessions() as session:
+        assert (
+            session.scalar(text("SELECT version_num FROM alembic_version"))
+            == "0002_config_schema_version"
+        )
+        assert session.get(SystemConfigVersion, valid_id).value == good
 
 
 def test_seed_is_idempotent_and_hashes_passwords(database: Database) -> None:
