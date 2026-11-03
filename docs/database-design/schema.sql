@@ -1,4 +1,4 @@
--- 第一组 数据库设计 2026-10-24
+-- 第一组 数据库设计 2026-11-03；修订M6评审意见
 
 -- Reference DESIGN only. Not an Alembic migration.
 
@@ -812,18 +812,23 @@ CREATE TABLE "analytics_daily_metrics" (
   "metric_date" date NOT NULL,
   "timezone" varchar(64) NOT NULL DEFAULT 'Asia/Shanghai',
   "study_seconds" integer CHECK (study_seconds IS NULL OR study_seconds>=0),
-  "submission_count" integer NOT NULL DEFAULT 0 CHECK (submission_count>=0),
-  "wrong_count" integer NOT NULL DEFAULT 0 CHECK (wrong_count>=0),
-  "sample_count" integer NOT NULL DEFAULT 0 CHECK (sample_count>=0),
+  "submission_count" integer CHECK (submission_count>=0),
+  "wrong_count" integer CHECK (wrong_count>=0),
+  "sample_count" integer CHECK (sample_count>=0),
   "data_state" varchar(32) NOT NULL DEFAULT 'unknown' CHECK (data_state IN ('unknown','partial','known')),
   "data_through" timestamptz(6),
   "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP CHECK (updated_at >= created_at),
   PRIMARY KEY ("id"),
-  UNIQUE NULLS NOT DISTINCT(consumer_id,student_user_id,course_id,class_id,metric_date,timezone),
+  UNIQUE NULLS NOT DISTINCT(consumer_id,student_user_id,course_id,class_id,metric_date),
   CHECK(class_id IS NULL OR course_id IS NOT NULL),
-  CHECK(data_state <> 'unknown' OR study_seconds IS NULL)
+  CHECK(data_state <> 'unknown' OR (study_seconds IS NULL AND submission_count IS NULL AND wrong_count IS NULL AND sample_count IS NULL)),
+  CHECK(data_state <> 'known' OR (study_seconds IS NOT NULL AND submission_count IS NOT NULL AND wrong_count IS NOT NULL AND sample_count IS NOT NULL))
 );
+
+CREATE INDEX ix_analytics_daily_consumer_class_date ON analytics_daily_metrics(consumer_id,class_id,metric_date);
+
+CREATE INDEX ix_analytics_daily_consumer_student_date ON analytics_daily_metrics(consumer_id,student_user_id,metric_date);
 
 CREATE INDEX "ix_analytics_daily_metrics_consumer_id" ON "analytics_daily_metrics"("consumer_id");
 
@@ -868,12 +873,17 @@ CREATE TABLE "report_jobs" (
   "error_code" varchar(64),
   "report_id" varchar(64),
   "created_at" timestamptz(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "started_at" timestamptz(6),
   "finished_at" timestamptz(6),
   PRIMARY KEY ("id"),
   UNIQUE(requested_by_user_id,idempotency_key),
   CHECK((student_user_id IS NOT NULL)::integer+(class_id IS NOT NULL)::integer=1),
   CHECK((status IN ('succeeded','failed','cancelled'))=(finished_at IS NOT NULL)),
-  CHECK(status<>'succeeded' OR report_id IS NOT NULL)
+  CHECK(status<>'succeeded' OR report_id IS NOT NULL),
+  CHECK(status<>'failed' OR (error_code IS NOT NULL AND length(btrim(error_code))>0)),
+  CHECK(status NOT IN ('running','succeeded') OR started_at IS NOT NULL),
+  CHECK(started_at IS NULL OR started_at>=created_at),
+  CHECK(finished_at IS NULL OR (finished_at>=created_at AND (started_at IS NULL OR finished_at>=started_at)))
 );
 
 CREATE INDEX "ix_report_jobs_requested_by_user_id" ON "report_jobs"("requested_by_user_id");
@@ -891,6 +901,7 @@ CREATE TABLE "analytics_quarantined_events" (
   "consumer_id" varchar(64) NOT NULL,
   "event_id" varchar(64) NOT NULL,
   "error_code" varchar(64) NOT NULL,
+  "error_detail" varchar(512),
   "status" varchar(32) NOT NULL DEFAULT 'open' CHECK (status IN ('open','retry_ready','resolved')),
   "attempts" integer NOT NULL DEFAULT 1 CHECK (attempts>=1),
   "resolved_by_user_id" varchar(64),
@@ -900,7 +911,9 @@ CREATE TABLE "analytics_quarantined_events" (
   PRIMARY KEY ("id"),
   UNIQUE(consumer_id,event_id),
   CHECK(last_failed_at>=first_failed_at),
-  CHECK((status='resolved')=(resolved_at IS NOT NULL))
+  CHECK((status='resolved')=(resolved_at IS NOT NULL)),
+  CHECK(status='open' OR resolved_by_user_id IS NOT NULL),
+  CHECK(resolved_at IS NULL OR resolved_at>=last_failed_at)
 );
 
 CREATE INDEX "ix_analytics_quarantined_events_consumer_id" ON "analytics_quarantined_events"("consumer_id");
@@ -1099,7 +1112,7 @@ ALTER TABLE "analytics_quarantined_events" ADD FOREIGN KEY ("consumer_id") REFER
 
 ALTER TABLE "analytics_quarantined_events" ADD FOREIGN KEY ("event_id") REFERENCES "learning_events"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
 
-ALTER TABLE "analytics_quarantined_events" ADD FOREIGN KEY ("resolved_by_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+ALTER TABLE "analytics_quarantined_events" ADD FOREIGN KEY ("resolved_by_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
 
 CREATE VIEW v_learning_event_feed AS SELECT id AS event_id,event_type,user_id,course_id,class_id,occurred_at,recorded_at,trace_id,schema_version,payload FROM learning_events;
 
@@ -1889,7 +1902,7 @@ COMMENT ON COLUMN "analytics_consumers"."last_poll_at" IS '最近扫描时间';
 
 COMMENT ON COLUMN "analytics_consumers"."last_observed_at" IS '最近观察事件时刻';
 
-COMMENT ON COLUMN "analytics_consumers"."processed_count" IS '累计处理量';
+COMMENT ON COLUMN "analytics_consumers"."processed_count" IS '累计处理量（诊断缓存）';
 
 COMMENT ON COLUMN "analytics_consumers"."created_at" IS '创建时刻';
 
@@ -1985,6 +1998,8 @@ COMMENT ON COLUMN "report_jobs"."report_id" IS '结果快照';
 
 COMMENT ON COLUMN "report_jobs"."created_at" IS '创建时刻';
 
+COMMENT ON COLUMN "report_jobs"."started_at" IS 'worker开始执行时刻';
+
 COMMENT ON COLUMN "report_jobs"."finished_at" IS '终态时间';
 
 COMMENT ON TABLE "analytics_quarantined_events" IS '毒事件隔离与审计重放；owner M6；设计基线2026-10-24';
@@ -1997,11 +2012,13 @@ COMMENT ON COLUMN "analytics_quarantined_events"."event_id" IS '源事件';
 
 COMMENT ON COLUMN "analytics_quarantined_events"."error_code" IS '脱敏失败码';
 
+COMMENT ON COLUMN "analytics_quarantined_events"."error_detail" IS '受控脱敏失败说明';
+
 COMMENT ON COLUMN "analytics_quarantined_events"."status" IS '处理状态';
 
 COMMENT ON COLUMN "analytics_quarantined_events"."attempts" IS '失败次数';
 
-COMMENT ON COLUMN "analytics_quarantined_events"."resolved_by_user_id" IS '人工处理者';
+COMMENT ON COLUMN "analytics_quarantined_events"."resolved_by_user_id" IS '授权重放操作者';
 
 COMMENT ON COLUMN "analytics_quarantined_events"."first_failed_at" IS '首次失败';
 

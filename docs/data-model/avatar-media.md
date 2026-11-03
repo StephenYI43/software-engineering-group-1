@@ -1,6 +1,6 @@
 # M4 业务与管理数据字典
 
-owner：M4；本批由M1补全设计，原owner负责后续实现；日期2026-10-24。
+owner：M4；本批由M1补全设计，原owner负责后续实现；修订日期2026-11-03。
 关联#69、#42、#71、#72、#65；状态：设计草案，待非作者评审，未接应用迁移/repository。
 
 物理结构唯一源为scripts/database-design/domain_model.py；生成DDL在docs/database-design/schema.sql。现有API字段不因新增列自动改变；公共增量须另经schema和消费者确认。

@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-24",
+  "date": "2026-11-03",
   "platformCommit": "e1fb5ff",
   "studentCommit": "423d0d6",
   "tutoringCommit": "b2eab6b",
@@ -4963,7 +4963,7 @@
         {
           "name": "processed_count",
           "type": "bigint",
-          "meaning": "累计处理量",
+          "meaning": "累计处理量（诊断缓存）",
           "nullable": false,
           "default": "0",
           "check": "processed_count>=0",
@@ -5001,7 +5001,7 @@
         "UNIQUE(consumer_key,algorithm_version)"
       ],
       "indexes": [],
-      "rules": "每轮事务锁本行串行化同消费者；last_observed只用于诊断，不参与排除旧事件。每次提交后新事务重查未处理事件，禁止WHERE id>水位造成永久漏读。不同算法版本独立consumer与聚合空间。",
+      "rules": "每轮事务锁本行串行化同消费者；last_observed只用于诊断，不参与排除旧事件。每次提交后新事务重查未处理事件，禁止WHERE id>水位造成永久漏读。processed_count仅为诊断缓存，ledger为权威；成功新增ledger与计数同事务，重放不重复加一。不同算法版本独立consumer与聚合空间，固定日界时区；更改时区须发布新consumer算法版本后重算，不能原地混算。",
       "json": {},
       "status": "本批补全设计；未接应用迁移和repository"
     },
@@ -5062,7 +5062,7 @@
       ],
       "constraints": [],
       "indexes": [],
-      "rules": "(consumer,event)唯一；写账本与聚合更新同事务，不先写done后改指标。重启重复扫不重复计数；源事件不可变。只有已成功处理才进入账本，隔离另表不伪装已完成。",
+      "rules": "(consumer,event)唯一；写账本与聚合更新同事务，不先写done后改指标。重启重复扫不重复计数；源事件不可变。source_hash规范和重算校验见decisions.md，覆盖班级快照与完整事实；摘要不一致拒绝重算并报告SOURCE_FACT_CHANGED，不覆盖原摘要或静默累计。只有已成功处理才进入账本，隔离另表不伪装已完成。",
       "json": {},
       "status": "本批补全设计；未接应用迁移和repository"
     },
@@ -5172,8 +5172,8 @@
           "name": "submission_count",
           "type": "integer",
           "meaning": "提交数",
-          "nullable": false,
-          "default": "0",
+          "nullable": true,
+          "default": null,
           "check": "submission_count>=0",
           "reference": null,
           "delete": "RESTRICT",
@@ -5184,8 +5184,8 @@
           "name": "wrong_count",
           "type": "integer",
           "meaning": "已判错数量",
-          "nullable": false,
-          "default": "0",
+          "nullable": true,
+          "default": null,
           "check": "wrong_count>=0",
           "reference": null,
           "delete": "RESTRICT",
@@ -5196,8 +5196,8 @@
           "name": "sample_count",
           "type": "integer",
           "meaning": "有效样本数",
-          "nullable": false,
-          "default": "0",
+          "nullable": true,
+          "default": null,
           "check": "sample_count>=0",
           "reference": null,
           "delete": "RESTRICT",
@@ -5254,13 +5254,17 @@
         }
       ],
       "constraints": [
-        "UNIQUE NULLS NOT DISTINCT(consumer_id,student_user_id,course_id,class_id,metric_date,timezone)",
+        "UNIQUE NULLS NOT DISTINCT(consumer_id,student_user_id,course_id,class_id,metric_date)",
         "FOREIGN KEY(class_id,course_id) REFERENCES classes(id,course_id) ON DELETE RESTRICT",
         "CHECK(class_id IS NULL OR course_id IS NOT NULL)",
-        "CHECK(data_state <> 'unknown' OR study_seconds IS NULL)"
+        "CHECK(data_state <> 'unknown' OR (study_seconds IS NULL AND submission_count IS NULL AND wrong_count IS NULL AND sample_count IS NULL))",
+        "CHECK(data_state <> 'known' OR (study_seconds IS NOT NULL AND submission_count IS NOT NULL AND wrong_count IS NOT NULL AND sample_count IS NOT NULL))"
       ],
-      "indexes": [],
-      "rules": "class为事件发生时快照；无class事件不摊到每班。无观测时unknown+NULL，已确认无活动才known+0；不能用count默认0推断数据完整。迟到事件到达后重算受影响学生/班级/日，不按到达顺序累加推断时长。日界按时区日历，不按固定24小时跨DST。",
+      "indexes": [
+        "CREATE INDEX ix_analytics_daily_consumer_class_date ON analytics_daily_metrics(consumer_id,class_id,metric_date)",
+        "CREATE INDEX ix_analytics_daily_consumer_student_date ON analytics_daily_metrics(consumer_id,student_user_id,metric_date)"
+      ],
+      "rules": "class为事件发生时快照；无class事件不摊到每班。无观测时unknown+NULL，已确认无活动才known+0；unknown的时长/提交/错题/样本全部NULL；known显式填写所有数值，partial可保留未知指标NULL。没有默认0推断数据完整。timezone保留为日界审计列，不参与唯一键；同consumer固定时区，变更发布新算法版本。迟到事件到达后重算受影响学生/班级/日，不按到达顺序累加推断时长。日界按时区日历，不按固定24小时跨DST。",
       "json": {},
       "status": "本批补全设计；未接应用迁移和repository"
     },
@@ -5553,6 +5557,18 @@
           "rule": ""
         },
         {
+          "name": "started_at",
+          "type": "timestamptz(6)",
+          "meaning": "worker开始执行时刻",
+          "nullable": true,
+          "default": null,
+          "check": null,
+          "reference": null,
+          "delete": "RESTRICT",
+          "primary": false,
+          "rule": ""
+        },
+        {
           "name": "finished_at",
           "type": "timestamptz(6)",
           "meaning": "终态时间",
@@ -5569,10 +5585,14 @@
         "UNIQUE(requested_by_user_id,idempotency_key)",
         "CHECK((student_user_id IS NOT NULL)::integer+(class_id IS NOT NULL)::integer=1)",
         "CHECK((status IN ('succeeded','failed','cancelled'))=(finished_at IS NOT NULL))",
-        "CHECK(status<>'succeeded' OR report_id IS NOT NULL)"
+        "CHECK(status<>'succeeded' OR report_id IS NOT NULL)",
+        "CHECK(status<>'failed' OR (error_code IS NOT NULL AND length(btrim(error_code))>0))",
+        "CHECK(status NOT IN ('running','succeeded') OR started_at IS NOT NULL)",
+        "CHECK(started_at IS NULL OR started_at>=created_at)",
+        "CHECK(finished_at IS NULL OR (finished_at>=created_at AND (started_at IS NULL OR finished_at>=started_at)))"
       ],
       "indexes": [],
-      "rules": "调度重试复用幂等键；执行时重新检查请求者权限，不能拿创建时权限永久导出。报告结果与任务成功同事务。",
+      "rules": "调度重试复用幂等键；执行时重新检查请求者权限，不能拿创建时权限永久导出。报告结果与任务成功同事务。running/succeeded必须有started_at；failed必须有非空脱敏error_code，排队即失败/取消可以尚未开始。开始/结束时间不得倒退，不能用created_at伪称执行开始。",
       "json": {},
       "status": "本批补全设计；未接应用迁移和repository"
     },
@@ -5631,6 +5651,18 @@
           "rule": ""
         },
         {
+          "name": "error_detail",
+          "type": "varchar(512)",
+          "meaning": "受控脱敏失败说明",
+          "nullable": true,
+          "default": null,
+          "check": null,
+          "reference": null,
+          "delete": "RESTRICT",
+          "primary": false,
+          "rule": ""
+        },
+        {
           "name": "status",
           "type": "varchar(32)",
           "meaning": "处理状态",
@@ -5657,12 +5689,12 @@
         {
           "name": "resolved_by_user_id",
           "type": "varchar(64)",
-          "meaning": "人工处理者",
+          "meaning": "授权重放操作者",
           "nullable": true,
           "default": null,
           "check": null,
           "reference": "users.id",
-          "delete": "SET NULL",
+          "delete": "RESTRICT",
           "primary": false,
           "rule": ""
         },
@@ -5706,10 +5738,12 @@
       "constraints": [
         "UNIQUE(consumer_id,event_id)",
         "CHECK(last_failed_at>=first_failed_at)",
-        "CHECK((status='resolved')=(resolved_at IS NOT NULL))"
+        "CHECK((status='resolved')=(resolved_at IS NOT NULL))",
+        "CHECK(status='open' OR resolved_by_user_id IS NOT NULL)",
+        "CHECK(resolved_at IS NULL OR resolved_at>=last_failed_at)"
       ],
       "indexes": [],
-      "rules": "不复制敏感payload，引用原事件。open明确告警/报告partial，不静默跳过；授权人工审计后置retry_ready，成功处理后ledger+聚合+resolved同事务。源事件保持不变；修schema/算法用新consumer版本或受控重放。",
+      "rules": "不复制敏感payload，引用原事件。open明确告警/报告partial，不静默跳过；授权人工审计后置retry_ready并在同事务写resolved_by_user_id（授权重放者）；resolved沿用该持久操作者，不用worker进程内变量。重放再次失败回open，清操作者并保留失败审计；成功处理后ledger+聚合+resolved同事务。操作者FK用RESTRICT保留审计引用；error_detail只允许受控错误模板，不拼接异常、SQL、payload或学生正文。源事件保持不变；修schema/算法用新consumer版本或受控重放。",
       "json": {},
       "status": "本批补全设计；未接应用迁移和repository"
     }

@@ -64,7 +64,7 @@ def main():
         "system_config_versions": "平台配置版本",
     }
     sql = [
-        "-- 第一组 数据库设计 2026-10-24",
+        "-- 第一组 数据库设计 2026-11-03；修订M6评审意见",
         "-- Reference DESIGN only. Not an Alembic migration.",
         "-- Empty disposable *_test database only. No DROP, no production seed, no credentials.",
         "BEGIN;",
@@ -193,7 +193,7 @@ def main():
         set(JSON) - json_columns,
     )
     inventory = {
-        "date": "2026-10-24",
+        "date": "2026-11-03",
         "platformCommit": "e1fb5ff",
         "studentCommit": "423d0d6",
         "tutoringCommit": "b2eab6b",
@@ -235,7 +235,7 @@ def main():
         lines = [
             f"# {owner} 业务与管理数据字典",
             "",
-            f"owner：{owner}；本批由M1补全设计，原owner负责后续实现；日期2026-10-24。",
+            f"owner：{owner}；本批由M1补全设计，原owner负责后续实现；修订日期2026-11-03。",
             "关联#69、#42、#71、#72、#65；状态：设计草案，待非作者评审，未接应用迁移/repository。",
             "",
             "物理结构唯一源为scripts/database-design/domain_model.py；生成DDL在docs/database-design/schema.sql。现有API字段不因新增列自动改变；公共增量须另经schema和消费者确认。",

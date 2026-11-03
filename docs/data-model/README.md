@@ -3,7 +3,7 @@
 关联：[#69 总任务](https://github.com/StephenYI43/software-engineering-group-1/issues/69)。
 基线日期：2026-10-24。状态：**全域补全设计待评审；参考DDL真实PG验证通过，不等于应用持久化完成。**
 
-组长已授权本批直接介入缺失设计。[全域设计入口](../database-design/README.md)含40表/413列清单、完整SQL、JSON属性、跨域决定和真实验证记录；成员后续负责按本设计实现，不再以“等待别人出字典”为整体阻塞。
+组长已授权本批直接介入缺失设计。[全域设计入口](../database-design/README.md)含40表/415列清单、完整SQL、JSON属性、跨域决定和真实验证记录；成员后续负责按本设计实现，不再以“等待别人出字典”为整体阻塞。
 
 ## 实际起点
 
@@ -74,4 +74,4 @@ owner：M2，实际结果填写 `acceptance.md`，不得预先勾选。
 
 删除/降级只在显式临时测试库执行；保留卷重启不能使用删除卷命令。
 课堂模型可Mock，数据库不得用InMemory或SQLite冒充PostgreSQL。
-本批40表参考DDL、合成写入、7类约束反例、回滚、两连接迟到查询及PG进程重启已实跑，见[真实记录](../database-design/verification.md)。这不代表应用迁移、领域repository/API、全消费者或UI完成。
+本批40表参考DDL、合成写入、16项约束反例（2026-11-03复验）、回滚、两连接迟到查询及PG进程重启已实跑，见[真实记录](../database-design/verification.md)。这不代表应用迁移、领域repository/API、全消费者或UI完成。

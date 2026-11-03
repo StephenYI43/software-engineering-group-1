@@ -1075,14 +1075,14 @@ t(
         c(
             "processed_count",
             "bigint",
-            "累计处理量",
+            "累计处理量（诊断缓存）",
             default="0",
             check="processed_count>=0",
         ),
         *times(),
     ],
     constraints=["UNIQUE(consumer_key,algorithm_version)"],
-    rules="每轮事务锁本行串行化同消费者；last_observed只用于诊断，不参与排除旧事件。每次提交后新事务重查未处理事件，禁止WHERE id>水位造成永久漏读。不同算法版本独立consumer与聚合空间。",
+    rules="每轮事务锁本行串行化同消费者；last_observed只用于诊断，不参与排除旧事件。每次提交后新事务重查未处理事件，禁止WHERE id>水位造成永久漏读。processed_count仅为诊断缓存，ledger为权威；成功新增ledger与计数同事务，重放不重复加一。不同算法版本独立consumer与聚合空间，固定日界时区；更改时区须发布新consumer算法版本后重算，不能原地混算。",
 )
 t(
     "analytics_processed_events",
@@ -1117,7 +1117,7 @@ t(
             check="source_hash ~ '^[0-9a-f]{64}$'",
         ),
     ],
-    rules="(consumer,event)唯一；写账本与聚合更新同事务，不先写done后改指标。重启重复扫不重复计数；源事件不可变。只有已成功处理才进入账本，隔离另表不伪装已完成。",
+    rules="(consumer,event)唯一；写账本与聚合更新同事务，不先写done后改指标。重启重复扫不重复计数；源事件不可变。source_hash规范和重算校验见decisions.md，覆盖班级快照与完整事实；摘要不一致拒绝重算并报告SOURCE_FACT_CHANGED，不覆盖原摘要或静默累计。只有已成功处理才进入账本，隔离另表不伪装已完成。",
 )
 t(
     "analytics_daily_metrics",
@@ -1143,15 +1143,21 @@ t(
             "submission_count",
             "integer",
             "提交数",
-            default="0",
+            nullable=True,
             check="submission_count>=0",
         ),
-        c("wrong_count", "integer", "已判错数量", default="0", check="wrong_count>=0"),
+        c(
+            "wrong_count",
+            "integer",
+            "已判错数量",
+            nullable=True,
+            check="wrong_count>=0",
+        ),
         c(
             "sample_count",
             "integer",
             "有效样本数",
-            default="0",
+            nullable=True,
             check="sample_count>=0",
         ),
         enum("data_state", "数据状态", "unknown/partial/known", "unknown"),
@@ -1159,12 +1165,17 @@ t(
         *times(),
     ],
     constraints=[
-        "UNIQUE NULLS NOT DISTINCT(consumer_id,student_user_id,course_id,class_id,metric_date,timezone)",
+        "UNIQUE NULLS NOT DISTINCT(consumer_id,student_user_id,course_id,class_id,metric_date)",
         "FOREIGN KEY(class_id,course_id) REFERENCES classes(id,course_id) ON DELETE RESTRICT",
         "CHECK(class_id IS NULL OR course_id IS NOT NULL)",
-        "CHECK(data_state <> 'unknown' OR study_seconds IS NULL)",
+        "CHECK(data_state <> 'unknown' OR (study_seconds IS NULL AND submission_count IS NULL AND wrong_count IS NULL AND sample_count IS NULL))",
+        "CHECK(data_state <> 'known' OR (study_seconds IS NOT NULL AND submission_count IS NOT NULL AND wrong_count IS NOT NULL AND sample_count IS NOT NULL))",
     ],
-    rules="class为事件发生时快照；无class事件不摊到每班。无观测时unknown+NULL，已确认无活动才known+0；不能用count默认0推断数据完整。迟到事件到达后重算受影响学生/班级/日，不按到达顺序累加推断时长。日界按时区日历，不按固定24小时跨DST。",
+    indexes=[
+        "CREATE INDEX ix_analytics_daily_consumer_class_date ON analytics_daily_metrics(consumer_id,class_id,metric_date)",
+        "CREATE INDEX ix_analytics_daily_consumer_student_date ON analytics_daily_metrics(consumer_id,student_user_id,metric_date)",
+    ],
+    rules="class为事件发生时快照；无class事件不摊到每班。无观测时unknown+NULL，已确认无活动才known+0；unknown的时长/提交/错题/样本全部NULL；known显式填写所有数值，partial可保留未知指标NULL。没有默认0推断数据完整。timezone保留为日界审计列，不参与唯一键；同consumer固定时区，变更发布新算法版本。迟到事件到达后重算受影响学生/班级/日，不按到达顺序累加推断时长。日界按时区日历，不按固定24小时跨DST。",
 )
 t(
     "analytics_report_snapshots",
@@ -1212,6 +1223,7 @@ t(
         c("error_code", "varchar(64)", "脱敏错误码", nullable=True),
         fk("report_id", "analytics_report_snapshots", "结果快照", nullable=True),
         *times(False),
+        c("started_at", "timestamptz(6)", "worker开始执行时刻", nullable=True),
         c("finished_at", "timestamptz(6)", "终态时间", nullable=True),
     ],
     constraints=[
@@ -1219,8 +1231,12 @@ t(
         "CHECK((student_user_id IS NOT NULL)::integer+(class_id IS NOT NULL)::integer=1)",
         "CHECK((status IN ('succeeded','failed','cancelled'))=(finished_at IS NOT NULL))",
         "CHECK(status<>'succeeded' OR report_id IS NOT NULL)",
+        "CHECK(status<>'failed' OR (error_code IS NOT NULL AND length(btrim(error_code))>0))",
+        "CHECK(status NOT IN ('running','succeeded') OR started_at IS NOT NULL)",
+        "CHECK(started_at IS NULL OR started_at>=created_at)",
+        "CHECK(finished_at IS NULL OR (finished_at>=created_at AND (started_at IS NULL OR finished_at>=started_at)))",
     ],
-    rules="调度重试复用幂等键；执行时重新检查请求者权限，不能拿创建时权限永久导出。报告结果与任务成功同事务。",
+    rules="调度重试复用幂等键；执行时重新检查请求者权限，不能拿创建时权限永久导出。报告结果与任务成功同事务。running/succeeded必须有started_at；failed必须有非空脱敏error_code，排队即失败/取消可以尚未开始。开始/结束时间不得倒退，不能用created_at伪称执行开始。",
 )
 t(
     "analytics_quarantined_events",
@@ -1232,14 +1248,15 @@ t(
         fk("consumer_id", "analytics_consumers", "消费者"),
         fk("event_id", "learning_events", "源事件"),
         c("error_code", "varchar(64)", "脱敏失败码"),
+        c("error_detail", "varchar(512)", "受控脱敏失败说明", nullable=True),
         enum("status", "处理状态", "open/retry_ready/resolved", "open"),
         c("attempts", "integer", "失败次数", default="1", check="attempts>=1"),
         fk(
             "resolved_by_user_id",
             "users",
-            "人工处理者",
+            "授权重放操作者",
             nullable=True,
-            delete="SET NULL",
+            delete="RESTRICT",
         ),
         c("first_failed_at", "timestamptz(6)", "首次失败", default="CURRENT_TIMESTAMP"),
         c("last_failed_at", "timestamptz(6)", "最近失败", default="CURRENT_TIMESTAMP"),
@@ -1249,8 +1266,10 @@ t(
         "UNIQUE(consumer_id,event_id)",
         "CHECK(last_failed_at>=first_failed_at)",
         "CHECK((status='resolved')=(resolved_at IS NOT NULL))",
+        "CHECK(status='open' OR resolved_by_user_id IS NOT NULL)",
+        "CHECK(resolved_at IS NULL OR resolved_at>=last_failed_at)",
     ],
-    rules="不复制敏感payload，引用原事件。open明确告警/报告partial，不静默跳过；授权人工审计后置retry_ready，成功处理后ledger+聚合+resolved同事务。源事件保持不变；修schema/算法用新consumer版本或受控重放。",
+    rules="不复制敏感payload，引用原事件。open明确告警/报告partial，不静默跳过；授权人工审计后置retry_ready并在同事务写resolved_by_user_id（授权重放者）；resolved沿用该持久操作者，不用worker进程内变量。重放再次失败回open，清操作者并保留失败审计；成功处理后ledger+聚合+resolved同事务。操作者FK用RESTRICT保留审计引用；error_detail只允许受控错误模板，不拼接异常、SQL、payload或学生正文。源事件保持不变；修schema/算法用新consumer版本或受控重放。",
 )
 
 assert len(TABLES) == 33

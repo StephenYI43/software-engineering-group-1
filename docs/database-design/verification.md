@@ -54,3 +54,13 @@ Ruff lint、格式检查和git diff --check实际通过。当前API/Web CI不会
 - 本机Docker Compose、生产部署、备份恢复和真实数据生命周期审批。
 
 平台#75此前62项及M2 E1/E2取证是已有平台实现证据，不与本批合并计算成全域应用完成。参考SQL通过后，仍须领域owner按任务交migration/repository/API与分层验收；本批不关闭#69。
+
+
+## 2026-11-03：M6评审修订复验
+
+同一锁定Python环境和Windows原生PostgreSQL 17.11，另建仅监听本机的空测试库。重新执行build_schema.py、verify_design.py、私有实例pg_ctl restart、verify_design.py --read-existing。初版上方的413列/390约束/7反例记录保留为历史证据。
+
+- 40表、415列、397约束，全表合成数据写入成功；16项数据库约束反例被拒绝。
+- 新反例覆盖unknown不能写0、known不能缺数值、改时区不能复制同日键、重放/解决必须有操作者、报告失败必须有安全错误码、执行与结束时间约束。已确认的0可写，合法重放状态与报告失败可写；核对两条查询索引存在。
+- 保留原失败事务回滚与双连接迟到提交可见性；实际重启临时PostgreSQL后40表行数、主键及全字段摘要一致。
+- 本次验证为参考DDL和受控SQL操作；未运行M6新worker、领域应用迁移、真实ACL或完整用户流程。source_hash协议仍待消费者实现验证；不把本次SQL测试当成M6分支PG测试已通过。

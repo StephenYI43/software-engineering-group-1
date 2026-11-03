@@ -77,3 +77,16 @@ ORDER BY e.occurred_at,e.event_id LIMIT :batchSize;
 - M2：复用已交检查器和E1/E2证据，逐域恢复真实验收；不将引用M1数字当自己的全域通过。
 
 每批都需要迁移升级、单head、真实PG约束/回滚/幂等/隔离和进程重启证据。未接API只写repository通过；未调用真实模型就保留Mock标识。本批只交设计/参考DDL，不关闭各域实现任务。
+
+
+## 2026-11-03：M6评审修订与实施约定
+
+参考设计更新为40表415列，仍不是应用迁移。日统计unknown行的study_seconds/submission_count/wrong_count/sample_count全部NULL；known行全部显式非NULL，允许真实0；partial允许未确认指标NULL。唯一键去掉timezone，保留日界审计列；同一consumer算法版本固定时区，变更时新建consumer版本并重新计算，不能按原键混写。
+
+补充(consumer_id,class_id,metric_date)与(consumer_id,student_user_id,metric_date)读索引。隔离表补error_detail varchar(512)，仅受控错误模板，不收原异常/SQL/请求正文。retry_ready和resolved必须持久记录resolved_by_user_id，它表示本次授权重放操作者；重启后从行读取，禁止从worker最近一次请求的进程变量取值。再次失败回open并记录失败审计，成功时账本、统计与resolved同事务。操作者外键RESTRICT；不靠SET NULL破坏已结算记录约束。每次请求重放、成功、失败另写管理审计，不能用本列替代审计历史。
+
+report_jobs补started_at；running/succeeded有真实开始时刻，failed有非空安全错误码，finished_at不得早于开始/创建。排队即失败或取消允许没有started_at。processed_count仅诊断缓存，权威为ledger行；只有新账本插入才同事务加一，重复事件不加，偏差由账本对账，不能据计数决定跳过源事件。
+
+source_hash采用命名协议learning-feed-sha256-v1：字段event_id/event_type/user_id/course_id/class_id/occurred_at/recorded_at/trace_id/schema_version/payload全部纳入，含NULL；两个时间转UTC、固定6位小数和Z；对象键递归排序，UTF-8、ensure_ascii=False、JSON紧凑分隔符，禁止NaN/Infinity。整数保持整数，payload遵守事件schema。计算SHA256小写hex。写账本时计算，迟到重算/受控重放前按同协议重新计算并比对原账本；不符报告SOURCE_FACT_CHANGED且回滚本轮，不覆盖旧hash或重复计数。算法/摘要协议变更使用新consumer版本。完整原始payload参与摘要但不打印或复制到日志；M6须用固定合成向量及class变更反例实现并评审，本设计不声称新worker已遵循。
+
+领域ORM统一继承app.core.db.base.Base，M1显式登记app/core/db/metadata.py import，M5协调唯一Alembic down_revision链。当前只注册平台是因为其他域尚未接受，不能导入不存在的模型或另建生产Base。M6新分支先保持隔离候选，接入时把临时模型切到统一Base、追加注册与升级测试；测试中的最小源表也不能当M5生产模型。

@@ -299,6 +299,92 @@ def main():
             (Jsonb({"schemaVersion": None}), existing["tutoring_turns"]["id"]),
             "JSON object version is not null",
         )
+        metric = existing["analytics_daily_metrics"]["id"]
+        reject(
+            "UPDATE analytics_daily_metrics SET submission_count=0 WHERE id=%s",
+            (metric,),
+            "unknown count cannot masquerade as zero",
+        )
+        reject(
+            "UPDATE analytics_daily_metrics SET data_state='known' WHERE id=%s",
+            (metric,),
+            "known metrics cannot contain null",
+        )
+        # Known zero is valid; put the fixture back to unknown after proving it.
+        conn.execute(
+            "UPDATE analytics_daily_metrics SET data_state='known',study_seconds=0,submission_count=0,wrong_count=0,sample_count=0 WHERE id=%s",
+            (metric,),
+        )
+        reject(
+            "INSERT INTO analytics_daily_metrics SELECT 'timezone_duplicate',consumer_id,student_user_id,course_id,class_id,metric_date,'UTC',study_seconds,submission_count,wrong_count,sample_count,data_state,data_through,created_at,updated_at FROM analytics_daily_metrics WHERE id=%s",
+            (metric,),
+            "timezone cannot duplicate daily key",
+        )
+        conn.execute(
+            "UPDATE analytics_daily_metrics SET data_state='unknown',study_seconds=NULL,submission_count=NULL,wrong_count=NULL,sample_count=NULL WHERE id=%s",
+            (metric,),
+        )
+        quarantine = existing["analytics_quarantined_events"]["id"]
+        reject(
+            "UPDATE analytics_quarantined_events SET status='retry_ready' WHERE id=%s",
+            (quarantine,),
+            "retry requires persistent operator",
+        )
+        reject(
+            "UPDATE analytics_quarantined_events SET status='resolved',resolved_at=now() WHERE id=%s",
+            (quarantine,),
+            "resolved requires persistent operator",
+        )
+        conn.execute(
+            "UPDATE analytics_quarantined_events SET status='retry_ready',resolved_by_user_id=%s,error_detail='SYNTHETIC_SCHEMA_MISMATCH' WHERE id=%s",
+            (existing["users"]["id"], quarantine),
+        )
+        conn.execute(
+            "UPDATE analytics_quarantined_events SET status='resolved',resolved_at=now() WHERE id=%s",
+            (quarantine,),
+        )
+        job = existing["report_jobs"]["id"]
+        reject(
+            "UPDATE report_jobs SET status='failed',finished_at=now() WHERE id=%s",
+            (job,),
+            "failed report requires safe error code",
+        )
+        reject(
+            "UPDATE report_jobs SET status='running' WHERE id=%s",
+            (job,),
+            "running report requires start time",
+        )
+        reject(
+            "UPDATE report_jobs SET started_at=created_at-interval '1 second' WHERE id=%s",
+            (job,),
+            "report start cannot predate creation",
+        )
+        conn.execute(
+            "UPDATE report_jobs SET status='running',started_at=now() WHERE id=%s",
+            (job,),
+        )
+        reject(
+            "UPDATE report_jobs SET status='failed',error_code='SYNTHETIC_FAILURE',finished_at=started_at-interval '1 second' WHERE id=%s",
+            (job,),
+            "report finish cannot predate start",
+        )
+        conn.execute(
+            "UPDATE report_jobs SET status='failed',error_code='SYNTHETIC_FAILURE',finished_at=now() WHERE id=%s",
+            (job,),
+        )
+        indexes = {
+            r[0]
+            for r in conn.execute(
+                "SELECT indexname FROM pg_indexes WHERE tablename='analytics_daily_metrics'"
+            )
+        }
+        assert {
+            "ix_analytics_daily_consumer_class_date",
+            "ix_analytics_daily_consumer_student_date",
+        } <= indexes
+        print(
+            "PASS: known zero/unknown null, persistent replay actor, report lifecycle and both read indexes"
+        )
         before = conn.execute("SELECT count(*) FROM learning_events").fetchone()[0]
         try:
             with conn.transaction():
