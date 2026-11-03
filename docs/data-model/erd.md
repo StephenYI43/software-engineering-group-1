@@ -1,7 +1,7 @@
 # 全域实体关系草图
 
-关联 #69；日期 2026-10-20；状态：设计草案，待 M1/M3/M4/M5/M6 共同评审。
-图中的表和关联尚未创建。七要素按模块文档落地后再由 M1 整合物理ER。
+关联 #69；日期 2026-10-24；状态：设计草案，待 M1/M3/M4/M5/M6 共同评审。
+本批已整合40表参考物理结构并在临时PG验证；图不代表应用迁移已合入。完整字段/FK和删除规则见[结构清单](../database-design/schema.json)与[参考DDL](../database-design/schema.sql)，新增class快照、版本与账本规则见[决定](../database-design/decisions.md)。
 `turn_citations` 中 citation_id 是轮内编号，候选键为(turn_id,citation_id)，不是全局实体ID。
 
 ```mermaid
