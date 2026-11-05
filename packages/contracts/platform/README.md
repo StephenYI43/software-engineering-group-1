@@ -11,7 +11,7 @@ GET /api/v1/health 无需凭证，HTTP 200，Cache-Control: no-store：
 ```
 
 requestId 由服务端每次重新生成 req_ + UUIDv4 的 32 位小写十六进制，不采用客户端 X-Request-ID；响应头 X-Request-ID 与正文一致。格式见 [schema](health-response.schema.json)。
-此端点不访问数据库或模型，不报告身份认证状态。未知路径目前沿用框架 404 返回结构；统一错误封装属于后续实现，客户端暂勿假定所有错误已经符合下方草案。
+此端点不访问数据库或模型，不报告身份认证状态。未知路径返回下方统一错误结构。
 
 ## 实体 ID 提议（回应 M3 PR #9）
 
@@ -33,6 +33,8 @@ citationId=c1/c2 是轮内标签，保持原约定，不作为实体主键。现
 
 ## 身份与权限
 
+手机号验证码与第三方登录的配置、候选契约及限制见 [扩展登录](external-sign-in.md)。
+
 角色 student/teacher/admin。服务端从已验证的会话获取 userId/role，不信任请求体或头里的自报角色。学生仅访问自己的私有学习记录；教师仅访问所属授课班级与课程；管理员权限须有明确授权和审计，不能靠客户端菜单控制。
 
 资源不存在和无权访问可统一返回 404 防枚举，未登录 401。鉴权必须先于 RAG 检索，courseId 只能收窄已授权范围。开发期禁止可被外部请求激活的鉴权旁路。
@@ -52,10 +54,16 @@ citationId=c1/c2 是轮内标签，保持原约定，不作为实体主键。现
 
 - 凭证为 HS256 会话 token，默认 24 小时（`AUTH_SESSION_TTL_SECONDS` 可调）
 - 校验失败统一 401 `INVALID_CREDENTIALS`，不区分「用户名不存在」与「密码错误」（防枚举）
-- `POST /api/v1/auth/logout` 以进程内吊销列表使凭证失效；幂等，不跨重启（S1 口径）
-- 合成账号为演示数据，见 `docs/development.md`；`require_user` 等鉴权依赖属 Issue #16，消费本凭证
+- `POST /api/v1/auth/logout` 幂等撤销凭证。数据库模式持久化撤销，无数据库演示模式使用进程内吊销列表。
+- 合成账号为演示数据，见 `docs/development.md`；`require_user` 等鉴权依赖消费本凭证（Issue #16）
 
-## 错误提议（未实现）
+### 服务端鉴权依赖（Issue #16）
+
+- `require_user` 校验签名、有效期和吊销状态，从凭证读取主体；`require_teacher` 只允许教师。
+- `require_owner` 比较主体与服务端查得的资源所有者。课程路由通过 `require_course_access` 接入 M5 的课程授权查询；查询未接入时返回 503，拒绝访问时返回 404。
+- `resolve_user_summaries` 为进程内调用提供学生摘要，只返回服务端已授权名单中的学生 ID、姓名、学号（可空）。暂无公开摘要接口，当前数据为合成账号。
+
+## 统一错误响应（Issue #46）
 
 继续使用 code/message/requestId/details，匹配现有规范，内部堆栈与凭证不得进入响应。跨服务透传 requestId 需要后续可信调用策略；当前服务拒用外部 requestId，不能据此宣称实现了分布式追踪。
 

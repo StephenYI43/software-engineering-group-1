@@ -24,6 +24,7 @@ DEFAULT_SYNTHETIC_ACCOUNTS: tuple[dict[str, str], ...] = (
         "userId": "user_11111111111111111111111111111111",
         "role": "student",
         "name": "学生甲",
+        "studentNumber": "DEMO-001",
     },
     {
         "username": "student2",
@@ -31,6 +32,7 @@ DEFAULT_SYNTHETIC_ACCOUNTS: tuple[dict[str, str], ...] = (
         "userId": "user_22222222222222222222222222222222",
         "role": "student",
         "name": "学生乙",
+        "studentNumber": "DEMO-002",
     },
     {
         "username": "teacher1",
@@ -51,6 +53,7 @@ class Account:
     username: str
     password: str
     session_user: SessionUser
+    student_number: str | None = None
 
 
 def load_accounts(raw_json: str) -> tuple[Account, ...]:
@@ -80,6 +83,11 @@ def _parse_entry(entry: Any, index: int) -> Account:
     user_id = entry["userId"]
     role = entry["role"]
     name = entry["name"]
+    student_number = entry.get("studentNumber")
+    if student_number is not None and (
+        not isinstance(student_number, str) or not 1 <= len(student_number) <= 32
+    ):
+        raise ValueError(f"AUTH_SYNTHETIC_ACCOUNTS[{index}] has invalid studentNumber")
     if not all(isinstance(value, str) and value for value in (username, password, user_id, name)):
         raise ValueError(f"AUTH_SYNTHETIC_ACCOUNTS[{index}] fields must be non-empty strings")
     if role not in ("student", "teacher", "admin"):
@@ -88,6 +96,7 @@ def _parse_entry(entry: Any, index: int) -> Account:
         username=username,
         password=password,
         session_user=SessionUser(user_id=user_id, role=role, name=name),
+        student_number=student_number,
     )
 
 
@@ -96,8 +105,8 @@ def verify_credentials(
 ) -> SessionUser | None:
     """Match username/password with constant-time comparison on both fields."""
     for account in accounts:
-        if hmac.compare_digest(account.username, username) and hmac.compare_digest(
-            account.password, password
-        ):
+        if hmac.compare_digest(
+            account.username.encode(), username.encode()
+        ) and hmac.compare_digest(account.password.encode(), password.encode()):
             return account.session_user
     return None
