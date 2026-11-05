@@ -54,7 +54,7 @@ citationId=c1/c2 是轮内标签，保持原约定，不作为实体主键。现
 
 - 凭证为 HS256 会话 token，默认 24 小时（`AUTH_SESSION_TTL_SECONDS` 可调）
 - 校验失败统一 401 `INVALID_CREDENTIALS`，不区分「用户名不存在」与「密码错误」（防枚举）
-- `POST /api/v1/auth/logout` 以进程内吊销列表使凭证失效；幂等，不跨重启（S1 口径）
+- `POST /api/v1/auth/logout` 幂等撤销凭证。数据库模式持久化撤销，无数据库演示模式使用进程内吊销列表。
 - 合成账号为演示数据，见 `docs/development.md`；`require_user` 等鉴权依赖消费本凭证（Issue #16）
 
 ### 服务端鉴权依赖（Issue #16）

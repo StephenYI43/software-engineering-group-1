@@ -4,9 +4,12 @@ version = "0.1.0"
 description = "University learning assistant platform API"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "alembic>=1.16,<2",
   "fastapi>=0.115,<1",
   "httpx>=0.27,<1",
   "pyjwt[crypto]>=2.10,<3",
+  "psycopg[binary]>=3.2,<4",
+  "sqlalchemy>=2.0,<2.1",
   "tzdata>=2024.1,<2027",
   "uvicorn>=0.30,<1",
 ]
@@ -38,6 +41,7 @@ files = ["app"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
+markers = ["postgres: requires TEST_DATABASE_URL pointing to an isolated PostgreSQL test database"]
 
 [tool.coverage.run]
 branch = true

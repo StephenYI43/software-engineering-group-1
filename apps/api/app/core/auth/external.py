@@ -12,9 +12,10 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, Cookie, Depends, Response
+from fastapi import APIRouter, Cookie, Depends, Request, Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from app.core.auth.context import auth_context
 from app.core.auth.providers import (
     OAuthConfig,
     Provider,
@@ -28,7 +29,6 @@ from app.core.auth.providers import (
 )
 from app.core.auth.schemas import LoginResponse, SessionUser
 from app.core.auth.settings import DEFAULT_SESSION_SECRET, AuthSettings
-from app.core.auth.tokens import SessionAuthority
 from app.core.errors import ApiError
 
 type Method = Literal["password", "sms", "github", "wechat", "school"]
@@ -45,7 +45,9 @@ class ExternalConfig(BaseModel):
     wechat: OAuthConfig | None = None
     school: SchoolConfig | None = None
     sms: SmsConfig | None = None
-    bindings: dict[Literal["sms", "github", "wechat", "school"], dict[str, str]]
+    bindings: dict[Literal["sms", "github", "wechat", "school"], dict[str, str]] = Field(
+        default_factory=dict
+    )
 
     @field_validator("web_origin")
     @classmethod
@@ -75,6 +77,13 @@ class ExternalConfig(BaseModel):
 
     def redirect_uri(self, provider: Provider) -> str:
         return f"{self.web_origin}/login/{provider}"
+
+    def issuer(self, provider: Literal["sms", "github", "wechat", "school"]) -> str:
+        if provider == "school" and self.school is not None:
+            return self.school.issuer
+        if provider == "wechat" and self.wechat is not None:
+            return f"wechat:{self.wechat.client_id}"
+        return "phone:e164" if provider == "sms" else "https://github.com"
 
 
 class MethodsResponse(BaseModel):
@@ -156,14 +165,16 @@ def method_unavailable() -> ApiError:
     return ApiError(404, "LOGIN_METHOD_UNAVAILABLE", "该登录方式未启用")
 
 
-def load_external_config(settings: AuthSettings) -> ExternalConfig | None:
+def load_external_config(
+    settings: AuthSettings, *, persistent: bool = False
+) -> ExternalConfig | None:
     raw = getenv("AUTH_EXTERNAL_LOGIN")
     if not raw:
         return None
     if (
         settings.session_secret == DEFAULT_SESSION_SECRET
         or len(settings.session_secret.encode()) < 32
-        or not getenv("AUTH_SYNTHETIC_ACCOUNTS")
+        or (not persistent and not getenv("AUTH_SYNTHETIC_ACCOUNTS"))
     ):
         raise ValueError(
             "external login requires a private session key and explicit local accounts"
@@ -172,6 +183,12 @@ def load_external_config(settings: AuthSettings) -> ExternalConfig | None:
         config = ExternalConfig.model_validate_json(raw)
     except ValidationError:
         raise ValueError("AUTH_EXTERNAL_LOGIN configuration is invalid") from None
+    if persistent:
+        if any(config.bindings.values()):
+            raise ValueError(
+                "database mode requires stored identity bindings; clear config bindings"
+            )
+        return config
     user_ids = {account.session_user.user_id for account in settings.accounts}
     if len(user_ids) != len(settings.accounts) or any(
         not subject or user_id not in user_ids
@@ -190,9 +207,10 @@ def provider_client() -> Iterator[httpx.Client]:
 
 def create_external_router(
     settings: AuthSettings,
-    authority: SessionAuthority,
+    *,
+    persistent: bool = False,
 ) -> APIRouter:
-    config = load_external_config(settings)
+    config = load_external_config(settings, persistent=persistent)
     if config is not None and config.wechat is not None:
         protect_wechat_logs()
     attempts = LoginAttempts()
@@ -205,18 +223,32 @@ def create_external_router(
         return config
 
     def linked_user(
-        method: Literal["sms", "github", "wechat", "school"], subject: str
+        request: Request, method: Literal["sms", "github", "wechat", "school"], subject: str
     ) -> SessionUser | None:
+        with auth_context(request) as context:
+            if context.repository is not None:
+                return context.repository.external_user(method, enabled().issuer(method), subject)
         user_id = enabled().bindings.get(method, {}).get(subject)
         return users.get(user_id) if user_id is not None else None
 
-    def login_response(user: SessionUser) -> LoginResponse:
-        issued = authority.issue(user)
-        return LoginResponse(token=issued.token, expires_at=issued.expires_at, user=user)
+    def login_response(
+        request: Request,
+        method: Literal["sms", "github", "wechat", "school"],
+        subject: str,
+    ) -> LoginResponse:
+        with auth_context(request) as context:
+            user = (
+                context.repository.external_user(method, enabled().issuer(method), subject)
+                if context.repository is not None
+                else linked_user(request, method, subject)
+            )
+            if user is None:
+                raise invalid_credentials()
+            return context.issue(user)
 
     @router.get("/methods")
     def methods() -> MethodsResponse:
-        result: list[Method] = ["password"] if settings.accounts else []
+        result: list[Method] = ["password"] if persistent or settings.accounts else []
         if config is not None:
             result.extend(provider for provider in _PROVIDERS if getattr(config, provider))
             if config.sms is not None:
@@ -251,6 +283,7 @@ def create_external_router(
 
     @router.post("/oauth/{provider}/exchange")
     def exchange(
+        request: Request,
         provider: Provider,
         payload: OAuthExchange,
         response: Response,
@@ -269,34 +302,37 @@ def create_external_router(
             flow.verifier,
             flow.nonce,
         )
-        user = linked_user(provider, subject)
-        if user is None:
-            raise invalid_credentials()
+        result = login_response(request, provider, subject)
         response.delete_cookie(_FLOW_COOKIE, path=_AUTH_PATH)
-        return login_response(user)
+        return result
 
     @router.post("/sms/send", status_code=204)
-    def send(payload: SmsSend, client: Annotated[httpx.Client, Depends(provider_client)]) -> None:
+    def send(
+        request: Request,
+        payload: SmsSend,
+        client: Annotated[httpx.Client, Depends(provider_client)],
+    ) -> None:
         sms = enabled().sms
         if sms is None:
             raise method_unavailable()
-        if linked_user("sms", payload.phone) is not None:
+        if linked_user(request, "sms", payload.phone) is not None:
             attempts.throttle_sms(payload.phone, sending=True)
             verify_sms(client, sms, payload.phone)
 
     @router.post("/sms/login")
     def sms_login(
+        request: Request,
         payload: SmsLogin,
         client: Annotated[httpx.Client, Depends(provider_client)],
     ) -> LoginResponse:
         sms = enabled().sms
         if sms is None:
             raise method_unavailable()
-        user = linked_user("sms", payload.phone)
+        user = linked_user(request, "sms", payload.phone)
         if user is None:
             raise invalid_credentials()
         attempts.throttle_sms(payload.phone, sending=False)
         verify_sms(client, sms, payload.phone, payload.code)
-        return login_response(user)
+        return login_response(request, "sms", payload.phone)
 
     return router

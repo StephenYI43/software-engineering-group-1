@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, Header, Request
 
+from app.core.auth.context import auth_context
 from app.core.auth.router import bearer_token
 from app.core.auth.schemas import SessionUser
 from app.core.errors import ApiError
@@ -20,7 +21,8 @@ def require_user(
     headers = {"WWW-Authenticate": "Bearer"}
     if token is None:
         raise ApiError(401, "TOKEN_REQUIRED", "缺少登录凭证", headers=headers)
-    user: CurrentPrincipal | None = request.app.state.session_authority.parse(token)
+    with auth_context(request) as context:
+        user = context.authority.parse(token)
     if user is None:
         raise ApiError(401, "INVALID_TOKEN", "登录凭证无效", headers=headers)
     return user
