@@ -220,6 +220,12 @@ S1 没有上报时长的学习事件（M4 的专注计时事件尚未定义）�
   S1 **不聚合进任何班级**，视为来源未知并在实现日志注明，待与 M5 确认后续归属口径。
 - 映射关系同时通过响应中的 `courseId` 返回，供页面解析章节标题。
 
+> **S1 隔离限制（M1 复审 2026-10-01 要求，如实记录）**：学习事件只携带 `courseId`，
+> **不携带 `classId`**。因此当**同一学生同时处于同一课程的两个班级**时聚合无法区分，
+> 该生数据会同时计入这两个班级——按「班级 → 课程」过滤只能挡住跨课程串数据。
+> 真实接表前必须由后续 Issue 决定补 `classId`，或冻结「同一学生同一课程只属一个班级」
+> 这一业务不变量；在此之前**不得宣称已完成完整跨班隔离**。
+
 ## 权限与错误
 
 错误结构遵循 `docs/code-standards.md:73`：`{ code, message, requestId, details }`。
@@ -244,7 +250,7 @@ S1 没有上报时长的学习事件（M4 的专注计时事件尚未定义）�
 - M6 提供 `APIRouter`；**挂载进 app factory 由 M1 协调**（`docs/team-plan.md:27`，`apps/api/app/main.py` 属 M1）。
   M6 不直接改公共入口文件。
 
-## 实现进度（2026-09-22）
+## 实现进度（2026-09-22；2026-10-20 按 M1 复审修复）
 
 S1 聚合内核与本文端点已在分支 `feat/analytics-aggregation` 实现
 （`apps/api/app/domains/analytics`）：事件模型、`(occurredAt, eventId)` 游标、
@@ -257,6 +263,11 @@ S1 聚合内核与本文端点已在分支 `feat/analytics-aggregation` 实现
 
 本文本轮评审修订（计数 known 0 口径、`MetricNumber` 规则收窄、`dataThrough` 语义、
 `consumption` 三态、`students` 分页、`courseId` 返回与班级映射）由 PR #38 rebase 后同步实现。
+
+M1 2026-10-01 复审的两个阻断项已在同分支修复：`dataThrough` 改为按「本班 / 本课程 /
+本查询周期实际纳入」计算（无纳入事件返回 `null`，不再取全局游标）；`consumption` 在上游
+水位落在周期内时比较**完整游标** `(occurredAt, eventId)`；同时补齐四条对应测试，并补上
+「事件无 `classId`」的隔离限制说明（见上「班级与课程映射」）。
 
 与已合并的上游契约（`learning-events.md`）逐条核对过：`eventId` 校验用其冻结格式
 （`event_` + 32 位小写 hex）；`isCorrect` / `score` 可空按「`null` 不等同 `false`」处理，
