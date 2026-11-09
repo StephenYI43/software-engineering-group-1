@@ -29,10 +29,11 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 | --- | --- |
 | `packages/contracts/tutoring/tutoring-response.md` | `turnId`/`sessionId`/`stage`/`content`/`citations`/`hasEvidence`/`followUps`/`emotion`/`action`/`isMock`/`promptVersion` |
 | `packages/contracts/tutoring/sse-events.md` | 终止事件、`stopped`/`error` 语义、断连只记内部状态、停止幂等 |
-| `apps/api/app/domains/tutoring/repository.py`（未合并） | `active`/`completed`/`stopped`/`errored`/`disconnected` 五个轮次状态与「同会话至多一个进行中轮次」 |
+| `apps/api/app/domains/tutoring/repository.py`（未合并） | 「同会话至多一个进行中轮次」等实现线索；其内存状态 `stopped`/`disconnected` **不得**直接升为持久化公共枚举（见 Q8/`aborted`） |
 | `apps/api/app/domains/tutoring/service.py`（未合并） | 错误码、停止优先级、token 用量与耗时日志、引用白名单 |
 | `apps/api/app/domains/tutoring/retrieval.py`（未合并）、`adapters/base.py`（已合并） | `RetrievedChunk` 四字段（文档、标题、页码、正文） |
 | `docs/adr/0004-rag-retrieval-boundary.md` | 授权先于检索、切片不跨页、无文字页显式报告、S1 不持久化 |
+| `packages/contracts/avatar/avatar-controller.md` | `emotion`/`action` 冻结枚举：`neutral|encouraging|thinking|celebrating` 与 `idle|nod|point|write` |
 | `ai/prompts/README.md` | 提示词文件名即 `promptVersion`，已发布版本不得就地改 |
 
 **本 PR 的验证仅限文档**：七列结构、字段与契约的映射、链接与差异检查。
@@ -48,7 +49,10 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 3. **外键**默认 `ON DELETE RESTRICT`；只有「派生数据」和「随父记录明确清除」的关系才用 `CASCADE`。
    跨域外键（`users`、`courses`）由 M1/M5 先建表，M3 只引用，**不直接写其他领域的表**。
 4. **业务写入必须在事务内**，仓储层不自行 `commit`；状态终态只允许一次迁移
-   （`active → completed | stopped | errored | disconnected`），之后不可回退。
+   （`active → completed | aborted | errored`），之后不可回退。
+   `stopped`/`client_disconnect` 等**契约传输语义**通过 `abort_reason` 细分，
+   持久化公共状态必须能存契约要求的 `aborted`（见 `sse-events.md`），
+   **不得**把 PR #62 内存里的 `stopped`/`disconnected` 直接升成持久化枚举。
 5. **授权不是外键**。物理 FK 只能保证「引用的行存在」，不能证明「调用者有权访问」；
    资源归属与课程/班级访问由服务端鉴权与 M5 花名册判定（`packages/contracts/platform/README.md`）。
 6. **模型输出与上传文档都是数据，不是指令**。`documents.title`、`assistant_content`、
@@ -119,9 +123,10 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 - `turn_citations.document_version` 是引用时的版本快照；文档重新解析产生新 `documents` 行与新 chunks，
   **旧引用继续指向旧版本**，不得被新版本覆盖。
 
-## 业务表
+## tutoring_sessions
 
-### tutoring_sessions
+> 归类：**业务表**（答疑会话）。以下至 `document_chunks` 共五张为业务表；`document_grants` 起四张为管理表。实体均以二级标题登记，避免把「业务表/管理表」当作表名被 #74 检查器重复登记。
+
 
 - 用途：一次多轮答疑会话，保存教学阶段与学生归属；业务类。
 - owner：M3。评审：M1（归属与鉴权）、M5（`course_id` 引用）。
@@ -156,7 +161,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 `sessionId` 一定符合 `sess_`+32hex。迁移前必须由 M1/M2 确认：新增「创建会话」端点并由服务端发号，
 还是继续把路径 ID 当不透明查询键、仅在服务端创建时发号。在该问题确认前不写死输入校验。
 
-### tutoring_turns
+## tutoring_turns
 
 - 用途：一次提问—回答回合，保存阶段、状态、问答正文、错误元数据与用量；业务类。
 - owner：M3。
@@ -167,7 +172,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 - 保留/删除：追加式记录，正文与学生问题**不得就地改写**；只允许一次终态迁移。
   常规不删除，随会话显式清除；跨域的播报记录（M4）引用 `turn_id` 时应使用 `RESTRICT`，
   本域不会在没有通知的情况下硬删历史。
-- 状态：设计草案；PR #62 的内存实现已有同等状态机（未合并），未建表、未迁移。
+- 状态：设计草案；持久化状态机以契约 `aborted` 为准（见上节 Q8），PR #62 内存状态机仅作实现线索（未合并），未建表、未迁移。
 
 | 物理字段名              | 中文名称/业务含义（需要时补别名）                | PostgreSQL 类型与长度/精度 | 可空 | 默认值                                             | 取值范围/枚举/唯一/CHECK                                                                 | PK/FK/关联与删除/更新规则                                          |
 | ----------------------- | ------------------------------------------------ | -------------------------- | ---- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -176,20 +181,21 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 | seq                     | 会话内第几轮提问（**不是** SSE 事件序号）        | integer                    | 否   | 无；服务端在会话行锁/事务内分配                    | `>0`；`UNIQUE(session_id, seq)` 兜底并发；不保证与 `id` 顺序一致                         | `UNIQUE(session_id, seq)` 之一                                     |
 | request_id              | 创建本轮的请求追踪号                             | varchar(36)                | 否   | 无；服务端生成                                     | `req_`+32 位小写 hex；不采用外部自报的 `X-Request-ID`                                    | 无（非键）；日志追踪用                                             |
 | student_content         | 学生本轮提问                                     | text                       | 否   | 无                                                 | 长度 1..2000 字符（契约请求上限）；敏感数据，不写日志、不进他人响应                      | 无（非键）                                                         |
-| assistant_content       | 本轮已生成正文；未完成时可为部分文本             | text                       | 是   | NULL                                               | completed 时必须非空；必须与全部 `delta.textDelta` 拼接逐字节相等；可尾随 `\n`           | 无（非键）                                                         |
+| assistant_content       | 本轮已生成正文；未完成时可为部分文本             | text                       | 是   | NULL                                               | completed 时必须非空；aborted/errored 时保留已生成片段（可为 NULL）；与已发出 `delta.textDelta` 拼接逐字节相等；可尾随 `\n`；S1 不另做截断清理 | 无（非键）                                                         |
 | stage                   | 本轮**冻结**的教学阶段                           | varchar(16)                | 否   | 无                                                 | CHECK IN(`thought`,`hint`,`step`,`summary`)；由服务端状态机在 claim 时确定，非模型输出   | 无（非键）                                                         |
-| status                  | 轮次状态                                         | varchar(16)                | 否   | `'active'`                                         | CHECK IN(`active`,`completed`,`stopped`,`errored`,`disconnected`)；终态不可回退          | 无（非键）；见下方部分唯一索引                                     |
+| status                  | 轮次状态                                         | varchar(16)                | 否   | `'active'`                                         | CHECK IN(`active`,`completed`,`aborted`,`errored`)；终态不可回退；停止/断连必须落 `aborted`（对齐 `sse-events.md`） | 无（非键）；见下方部分唯一索引                                     |
 | is_complete             | 是否构成完整回答                                 | boolean                    | 否   | false                                              | 必须与 `status = 'completed'` 严格一致                                                   | 无（非键）                                                         |
 | is_mock                 | 是否由离线假模型生成                             | boolean                    | 否   | 无                                                 | 如实反映来源；须与所用 `model_config_versions.is_mock` 一致                              | 无（非键）                                                         |
 | has_evidence            | 本轮是否检索到依据                               | boolean                    | 否   | false                                              | false ⟺ 该轮 `turn_citations` 为空（跨表，服务层保证）                                   | 无（非键）                                                         |
-| emotion                 | 数字人情绪快照；供 M4 播报                       | varchar(16)                | 是   | NULL                                               | completed 时必须非空；取值集合待 M4 冻结后加 CHECK，当前只校验长度                       | 无（非键）                                                         |
-| action                  | 数字人动作快照；供 M4 播报                       | varchar(16)                | 是   | NULL                                               | 同上                                                                                     | 无（非键）                                                         |
+| emotion                 | 数字人情绪快照；供 M4 播报                       | varchar(16)                | 是   | NULL                                               | completed 时必须非空；CHECK IN(`neutral`,`encouraging`,`thinking`,`celebrating`)（`avatar-controller.md` 已冻结）；非法取值不得落库，播报侧另有降级规则 | 无（非键）                                                         |
+| action                  | 数字人动作快照；供 M4 播报                       | varchar(16)                | 是   | NULL                                               | completed 时必须非空；CHECK IN(`idle`,`nod`,`point`,`write`)（`avatar-controller.md` 已冻结）；非法取值不得落库；**不为复用本枚举重开提示词版本** | 无（非键）                                                         |
 | follow_ups              | 建议追问列表                                     | jsonb                      | 否   | `'{"schemaVersion":"1.0","items":[]}'`             | 必须是对象；内部字典见「JSONB 内部字典」；`items` 至多 3 条、每条 1..200 字符            | 无（非键）                                                         |
 | prompt_version_id       | 产生本轮的提示词版本                             | varchar(64)                | 否   | 无                                                 | 必须是已登记版本；不得由客户端指定；API 的 `promptVersion` 由联表得到                    | FK→prompt_versions.id；ON DELETE RESTRICT；ON UPDATE NO ACTION     |
 | model_config_version_id | 本轮使用的模型配置版本                           | varchar(64)                | 否   | 无                                                 | 必须是已登记版本                                                                         | FK→model_config_versions.id；ON DELETE RESTRICT；ON UPDATE NO ACTION |
 | input_tokens            | 上游报告的输入 token 数                          | integer                    | 是   | NULL                                               | `>=0`；上游未报告时为 NULL，**不能填 0 冒充已知**                                        | 无（非键）                                                         |
 | output_tokens           | 上游报告的输出 token 数                          | integer                    | 是   | NULL                                               | `>=0`；同上                                                                              | 无（非键）                                                         |
 | duration_ms             | 本轮服务端耗时                                   | integer                    | 是   | NULL                                               | `>=0`；仅用于评测与排障，不作为计费依据                                                  | 无（非键）                                                         |
+| abort_reason            | 中断内部原因（停止/断连/重启结算）               | varchar(32)                | 是   | NULL                                               | CHECK IN(`client_stop`,`client_disconnect`,`server_restart`)；非空 ⟺ `status='aborted'`；对应 SSE `stopped.reason` 或进程恢复结算 | 无（非键）                                                         |
 | error_code              | 流内错误码                                       | varchar(32)                | 是   | NULL                                               | CHECK IN(`MODEL_OUTPUT_INVALID`,`MODEL_REFUSED`,`MODEL_TIMEOUT`,`RETRIEVAL_UNAVAILABLE`,`TURN_ABORTED`)；非空 ⟺ `status='errored'` | 无（非键）                                                         |
 | error_reason            | 错误内部原因码（如 `response_envelope_parse_failed`） | varchar(64)                | 是   | NULL                                               | 只允许登记的原因码；不得写入模型输出正文、堆栈或密钥                                     | 无（非键）                                                         |
 | created_at              | 轮次创建（claim）时刻                            | timestamptz(6)             | 否   | CURRENT_TIMESTAMP                                  | UTC                                                                                      | 无（非键）                                                         |
@@ -200,16 +206,49 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 - `UNIQUE(session_id) WHERE status = 'active'`：同一会话至多一个进行中轮次。
 - `CHECK ((status = 'completed') = is_complete)`。
 - `CHECK ((status = 'active') = (settled_at IS NULL))`。
+- `CHECK ((status = 'aborted') = (abort_reason IS NOT NULL))`。
 - `CHECK ((status = 'errored') = (error_code IS NOT NULL))`。
 - `CHECK (status = 'errored' OR error_reason IS NULL)`。
 - `CHECK (status <> 'completed' OR (assistant_content IS NOT NULL AND emotion IS NOT NULL AND action IS NOT NULL))`。
+- `CHECK (emotion IS NULL OR emotion IN ('neutral','encouraging','thinking','celebrating'))`。
+- `CHECK (action IS NULL OR action IN ('idle','nod','point','write'))`。
 - `CHECK (input_tokens IS NULL OR input_tokens >= 0)`，`output_tokens`、`duration_ms` 同理。
 
-**不设 `stop_reason` 列**：PR #62 的实现里能下发的原因只有 `client_stop`；
-`client_disconnect` 是连接断开，直接体现为 `status='disconnected'`，不产生事件。
-一个不可能取第二个值的列只会诱使调用方信任它，因此用 `status` 表达。
+### 持久状态与契约事件的对齐（回答 student.md Q8）
 
-### turn_citations
+`packages/contracts/tutoring/sse-events.md` 规定：用户停止与客户端断连时，该轮**持久化为 `aborted`，
+`isComplete = false`，教学阶段不推进**；`error` 同样 `isComplete = false` 且不推进。
+PR #62 内存仓库里的 `stopped` / `disconnected` / `errored` **不是**可直接升级的持久化公共基线。
+
+| 契约/运行时事件 | 持久化 `status` | `is_complete` | 内部原因字段 | `assistant_content` |
+| --- | --- | --- | --- | --- |
+| `completed` | `completed` | `true` | `abort_reason`/`error_code` 均为 NULL | 必须非空；与全部 delta 拼接一致 |
+| SSE `stopped`（`reason=client_stop`） | `aborted` | `false` | `abort_reason='client_stop'` | **保留**已生成片段；若尚未产生任何 delta 则为 NULL |
+| 客户端断连（`client_disconnect`） | `aborted` | `false` | `abort_reason='client_disconnect'` | 同上；断连**不**下发 SSE `stopped` 事件，但库内仍记 `aborted` |
+| SSE `error` | `errored` | `false` | `error_code` + 可选 `error_reason` | 保留已生成片段或 NULL |
+| 进程重启后仍为 `active` 的遗留轮 | `aborted` | `false` | `abort_reason='server_restart'` | 保留当时已落库的片段或 NULL |
+
+**正文是否保留**：保留。中断/失败轮的半截正文写入（或保留）`assistant_content`，供学生回看，
+**不得**计入「已完成回答」，也**不得**推进 `tutoring_sessions.current_stage`。
+
+**可空与上限**：`assistant_content` 可空（尚无任何输出时）；非空时类型为 `text`，
+与已发出 delta 拼接逐字节相等，可尾随 `\n`。S1 **不做额外截断清理**——不以「半截」为由删除或改写正文；
+也不得把半截正文改写成完成态。
+
+**清理规则**：中断轮次为追加式记录，常规不物理删除；随会话显式清除时级联。
+不因 `aborted`/`errored` 自动清空 `assistant_content`。保留期限仍见文末「待确认」（学校要求未到）。
+
+**恢复/历史展示**：列表与详情必须按 `is_complete=false`（及 `status ∈ {aborted,errored}`）展示为**未完成**；
+不得渲染为完整回答；不渲染引用/追问为「本轮有效教学结果」。S1 **只支持整轮重试，不支持断点续传**
+（与 `sse-events.md` / M2 确认一致）。
+
+**阶段**：仅 `status='completed'` 的轮次可推进 `current_stage`；`aborted`/`errored` 一律不推进。
+
+**重启遗留 `active`**：启动恢复或迁移后的结算任务必须把仍为 `active` 且已无对应进程的轮次
+一次迁移为 `aborted` + `abort_reason='server_restart'` + `settled_at=now()` + `is_complete=false`，
+释放部分唯一索引，避免会话永久 409。不得静默标成 `completed`。
+
+## turn_citations
 
 - 用途：一轮回答引用的课件片段**快照**，支持「翻到该页能找到支持结论的原文」；业务类。
 - owner：M3。消费者：M2 展示、M6 审核、评测与回溯。
@@ -237,7 +276,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 引用必须能证明「当时模型看到的原文是什么」，所以 `snippet`、`page_number`、`document_version`
 都在引用时落盘。外键只负责指向可追溯的实体，不替代快照。
 
-### documents
+## documents
 
 - 用途：授权课件的一个**不可变版本**：元数据、存储位置、内容哈希与解析结果计数；业务类。
 - owner：M3（表与解析语义）；上传入口由 M6 的教师端调用公开服务；访问规则由 M1/M5 判定。
@@ -274,7 +313,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 **版本链而不是覆盖**：重新解析或上传新版本时新建一行 `documents` 并指向上一版；
 旧版本与其 chunks、引用全部保留。这样「文档版本 + 页码 + 原文定位」在引用侧才成立。
 
-### document_chunks
+## document_chunks
 
 - 用途：文档版本切分后的可检索片段；业务类，检索层与评测消费。
 - owner：M3。消费者：`knowledge` 检索实现（#53）与答疑服务。
@@ -300,9 +339,10 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 **无文字页**：扫描件提取不到文字时**不生成 chunk，也不静默丢弃**；页号进入
 `document_import_jobs.pages_without_text`，由 M6 的解析状态页如实展示（ADR-0004 第 6 节）。
 
-## 管理表
+## document_grants
 
-### document_grants
+> 归类：**管理表**（文档显式授权）。
+
 
 - 用途：文档级**显式用户授权**（额外或例外授权），不承载班级、角色或课程范围的授权语义；管理类。
 - owner：M3（表与读写接口）；授权规则由 M1 的鉴权与 M5 的课程/花名册共同确认。
@@ -336,7 +376,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 - 不允许用 `grantee_user_id = 0`、空串或通配值表示「所有人」。公开或课程级可见性必须走
   M5 的花名册，不在本表造特例。
 
-### document_import_jobs
+## document_import_jobs
 
 - 用途：PDF 解析、切分、索引的异步任务状态与失败原因；管理类。
 - owner：M3（解析流水线）；调用方 M6（上传后查状态）、M3 检索层依赖 `succeeded`。
@@ -367,7 +407,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 `document_import_jobs.status` 回答「这一次解析跑得怎么样」。一份文档可以有多次重试任务，
 最后一次成功即可把文档置 `available`；失败任务保留供 M6 展示与重试。
 
-### prompt_versions
+## prompt_versions
 
 - 用途：提示词版本的登记与可追溯；正文的唯一来源是 Git 中的 `ai/prompts/*.md` 文件；管理类。
 - owner：M3。评审：M1、M5（提示词版本影响评测可比性，属公共接口变更）。
@@ -396,7 +436,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 `template_path` + `content_sha256` 足以证明「这一轮用的是哪一版、当时文件内容是什么」。
 若文件缺失或哈希不符，服务应失败而不是回退到其他版本。
 
-### model_config_versions
+## model_config_versions
 
 - 用途：模型调用配置版本（供应商、模型名、采样参数、超时），用于复现与审计；管理类。
 - owner：M3。评审：M1（供应商/部署与密钥边界）。
@@ -428,7 +468,7 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 表中最多出现 provider 代码；若将来需要引用，只允许存受控的 `secretRef` 与版本，
 且需 M1 单独评审，不能把密钥值写进数据库或日志。
 
-## JSONB 内部字典
+## JSONB内部字典
 
 JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校验；数据库层尽量加可表达的结构 CHECK，
 其余由服务层与测试保证。
@@ -467,7 +507,10 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
 | `citations[].snippet` | `turn_citations.snippet` | 引用时快照 |
 | `hasEvidence` | `tutoring_turns.has_evidence` | 与 citation 是否为空一致 |
 | `followUps` | `tutoring_turns.follow_ups.items` | 至多 3 条 |
-| `emotion` / `action` | `tutoring_turns.emotion` / `action` | 取值待 M4 冻结 |
+| `emotion` / `action` | `tutoring_turns.emotion` / `action` | 冻结枚举见 `avatar-controller.md`；completed 时必填 |
+| SSE `stopped.reason` | `tutoring_turns.abort_reason` | 仅 `aborted`；取值 `client_stop` / `client_disconnect`（另有结算用 `server_restart`） |
+| 持久化轮次状态 | `tutoring_turns.status` | `active`/`completed`/`aborted`/`errored`；停止与断连均为 `aborted`，不是 `stopped`/`disconnected` |
+| `isComplete` | `tutoring_turns.is_complete` | 与 `status='completed'` 严格一致 |
 | `isMock` | `tutoring_turns.is_mock` | 与模型配置一致 |
 | `promptVersion` | `prompt_versions.version_label`（联表） | 不直接暴露内部 `id` |
 | `createdAt` | `tutoring_turns.settled_at` | PR #62 对完成响应取装配时刻；持久化后取终态时刻，语义一致 |
@@ -491,8 +534,10 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
 2. **授权集合只由授权方产生。** 来源包括：M1 的角色与文件访问规则、M5 的选课/授课关系、
    `document_grants` 的显式用户授权、`documents.uploader_user_id` 的上传者访问。
    **检索层只接收结果，永不自算授权**（ADR-0004）。
-3. **`courseId` 只能收窄。** 请求里的 `courseId` 与已授权集合求交；交集为空就是
-   `hasEvidence=false`，不能因为传了 `courseId` 就放宽到该课程全部文档。
+3. **`courseId` 只能收窄，无权则先拒绝。** 请求里的 `courseId` 与已授权集合求交；
+   **有 `courseId` 但调用者对该课无权限时必须先拒绝（鉴权失败），不得降成 `hasEvidence=false`
+   继续作答以免泄露资源存在性**（M1 已裁定）。`course_id` 允许 NULL 表示无课程上下文的通用答疑，
+   NULL **不授予**任何课程文档权。交集在「已授权且指定课程」内为空时，才是无证据检索结果。
 4. **引用白名单在服务端。** 模型返回的 `citationId` 只是标签；服务端遍历本轮检索结果，
    丢弃不在白名单内的标签，按服务端顺序组装 `turn_citations`。
    检索候选只来自 `documents.status='available'` 的版本；`uploaded`（尚未解析成功）与
@@ -509,8 +554,10 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
 1. 学生 A 读取学生 B 的会话或轮次：查询返回 404 或 0 行；不能通过修改路径参数绕过归属检查。
 2. 同一会话并发发起两个提问：第二个因 `UNIQUE(session_id) WHERE status='active'` 失败并返回 409；
    实际只有一轮 `completed`，阶段只推进一级。
-3. `stopped` / `errored` / `disconnected` 轮次不推进 `tutoring_sessions.current_stage`
-   （`status <> 'completed'`，服务层断言）。
+3. `aborted`（含停止/断连/重启结算）与 `errored` 轮次不推进 `tutoring_sessions.current_stage`
+   （`status <> 'completed'`，服务层断言）；半截 `assistant_content` 不得被展示或统计为完成回答。
+3b. 进程重启后遗留的 `active` 轮必须结算为 `aborted` + `abort_reason='server_restart'`，
+    不得长期占用 `UNIQUE(session_id) WHERE status='active'`。
 4. `hasEvidence=false` 的轮次没有 citation 行；`hasEvidence=true` 的轮次至少一条 citation，
    且每条 `document_id` 都在本轮授权检索结果内。
 5. 对已撤销授权或未授权文档的引用无法落库：服务层白名单丢弃标签；伪造的 `documentId`
@@ -529,25 +576,29 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
 
 ## 待确认事项
 
+### M1 本轮已裁定（写入字典，不再当开放问题）
+
+- **前缀**：`chunk_`/`grant_`/`job_`/`promptver_`/`modelcfg_` 可作为本域候选；后续在平台契约小变更中登记唯一用途，由 M1/M5 核验。当前不收紧旧短 ID 输入，也不据前缀判权。
+- **`course_id` 可空**：允许 NULL 表示无课程上下文的通用答疑；NULL 不授予任何课程文档权。有 `courseId` 但无权限须先拒绝。
+- **对话可见性**：用户私有对话默认不向教师开放全文；引用/摘要也须重新鉴权。管理员角色本身不代表无限读对话权限。
+- **`sessionId`**：持久化目标采用**服务端生成**；需另提创建会话的 schema/样例给 M2/M1 确认。Mock「首次见路径即建会话」只限显式演示。旧短 ID 样例保持兼容。
+- **评测字段**：`input_tokens`/`output_tokens`/`duration_ms` 可留在轮次作最小可观测数据；缺失为 NULL、非负、不含正文；不因此扩大教师可见面。
+- **`emotion`/`action`**：已按 `avatar-controller.md` 冻结枚举登记 CHECK；**不为复用枚举重开提示词版本**。
+
+### 仍待确认
+
 - [ ] **M5**：班级/课程可见性如何归一化为「已授权文档集合」；`document_grants` 是否需要在
       M5 定义后新增受 FK 约束的班级列，还是继续只做用户级例外授权。
-- [ ] **M1**：`chunk_`、`grant_`、`job_`、`promptver_`、`modelcfg_` 五个新前缀是否登记到平台契约；
-      `users`/`courses` 迁移必须先于本域，迁移顺序由 M5 协调、M1 检查可部署性。
-- [ ] **M4**：`emotion`/`action` 正式枚举冻结后，为 `tutoring_turns` 增加 CHECK 并升级提示词到 v2；
-      本 PR 不预写未冻结的取值。
+      **`courses` FK 依赖 M5 字典/表，属真实依赖；本 PR 不建占位课程表。**
+- [ ] **M1**：上述五个新前缀登记进平台契约的具体变更 PR；`users`/`courses` 迁移必须先于本域，
+      迁移顺序由 M5 协调、M1 检查可部署性（#75 底座候选合入后走 B 批，禁止另建 Base/0001）。
+- [ ] **M1/M2**：创建会话端点的路径/请求/响应 schema 与样例（服务端发号）；本字典只锁定目标，不在此凭空冻结接口。
 - [ ] **M2/M6**：`documents.status` 与 `document_import_jobs.status` 是否都需要对外展示；
       解析状态接口的响应结构由 M6 的契约决定，本表只提供事实。
 - [ ] **M6/M3**：上传者自动访问用 `documents.uploader_user_id` 派生、不写授权行，是否被接受。
 - [ ] **全员**：学生会话、问答正文与上传文档的保留期限需要学校/项目给出实际要求；
-      本文不编造天数，保留策略在得到要求前只写「按确认后的期限执行」。
-- [ ] **M1/M2**：`sessionId` 由客户端路径提供、服务端首次见到即创建的现有语义，持久化后如何调整
-      （服务端发号 vs 客户端不透明查询键）；旧短 ID 样例的兼容边界也需一并确认。
-- [ ] **M1**：`tutoring_sessions.course_id` 可空是否符合 S1 的会话创建方式（PR #62 中首个提问即建会话，
-      可能没有课程上下文）。
-- [ ] **M1/M3**：`input_tokens`/`output_tokens`/`duration_ms` 这类评测字段是否留在业务表，
-      还是迁到评测结果存储；保留在表里会扩大学生数据的存储面。
-- [ ] **M1/M5/M6**：版权或授权撤回导致必须删除课件时，既有引用快照如何处理；
-      需要一条明确的数据清除流程，不能靠 `CASCADE` 静默抹掉历史。
+      本文不编造天数或无限保留。下架停止新检索；必须清除时应有授权流程覆盖原文件/chunks/引用快照/备份，
+      并留不含正文的审计，不以 `RESTRICT` 为永久拒删理由（联合 M4/M5/M6 确认后再实现）。
 
 ## 本文的验证与证据
 
@@ -556,11 +607,14 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
 - `git diff --check`：无空白错误。
 - 用脚本核对每张 markdown 表内列数一致，并确认 11 张七要素表（9 张表 + 2 张 JSONB 字典）
   每行恰好 7 列、表头与 #69 的七要素模板一致。
-- 逐条核对字段与 `packages/contracts/tutoring/`（已合并）及
-  `apps/api/app/domains/tutoring/`（PR #62 分支，未合并）的现有取值；
-  没有新增未在契约中出现的 API 字段。
-- 链接与路径检查：本文引用的是仓库相对路径；`docs/data-model/` 下三份基线文件由 #73 引入，
-  两份 PR 都合并后才会在 main 上同时存在。issue 链接指向公开仓库。
+- 逐条核对字段与 `packages/contracts/tutoring/`、`packages/contracts/avatar/avatar-controller.md`
+  （已合并）及 `apps/api/app/domains/tutoring/`（PR #62 分支，未合并）的取值；
+  持久化状态已与 `sse-events.md` 的 `aborted` 对齐，不再沿用内存枚举作公共基线。
+- 九张实体表均以**二级标题**登记（与 #75 `platform.md` 一致），避免「业务表/管理表」被检查器当表名；
+  M2 在 #74 亦已支持三级实体标题，两种结构均可被登记，本文件采用二级实体标题以消除歧义。
+- 链接与路径检查：本文引用的是仓库相对路径；`docs/data-model/` 下基线文件由 #73/#74/#75 等引入，
+  未全部合入 main 前可能缺页。issue 链接指向公开仓库。
 
-**没有运行**：pytest、ruff、mypy、真实 PostgreSQL。它们与纯文档改动无关；
+**没有运行**：pytest、ruff、mypy、真实 PostgreSQL，也未在本环境跑 #74 的 `check-data-dictionary.mjs`
+（该脚本尚在 #74 分支）。它们与本轮纯文档收口无关；
 一旦进入 B 批迁移，必须另行提供 `upgrade head`、约束/索引核对与真实 PostgreSQL 测试证据。
