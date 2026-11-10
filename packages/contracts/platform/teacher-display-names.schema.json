@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TeacherDisplayNames",
+  "type": "object",
+  "maxProperties": 100,
+  "propertyNames": {
+    "pattern": "^user_[0-9a-f]{32}$"
+  },
+  "additionalProperties": {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 100,
+    "pattern": "\\S"
+  }
+}
