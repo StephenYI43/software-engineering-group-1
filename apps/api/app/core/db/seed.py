@@ -10,6 +10,7 @@ from app.core.db.models import Role, SystemConfigVersion, User, UserProfile, Use
 from app.core.db.passwords import hash_password
 from app.core.db.repository import PlatformRepository, new_id
 from app.core.db.session import Database, load_database_url
+from app.domains.tutoring.seed import seed_tutoring_versions
 from app.core.request_id import create_request_id
 
 _ADMIN = {
@@ -92,6 +93,7 @@ def seed(database: Database) -> None:
                         value=value,
                     )
                 )
+        seed_tutoring_versions(session)
 
 
 def main() -> None:
