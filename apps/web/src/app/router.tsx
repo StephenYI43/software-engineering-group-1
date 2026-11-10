@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router'
+import { LoginPage } from '../features/auth/login-page'
 import { studentRoutes } from '../features/student/routes'
 import { teacherRoutes } from '../features/teacher/routes'
 import { AppLayout } from './app-layout'
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <Navigate to="/courses" replace /> },
+      { path: 'login/:provider?', element: <LoginPage /> },
       ...studentRoutes,
       ...teacherRoutes,
     ],

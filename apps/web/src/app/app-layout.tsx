@@ -12,6 +12,7 @@ export function AppLayout() {
         </Link>
         <nav className="app-header__nav">
           <Link to="/courses">课程</Link>
+          <Link to="/login">登录</Link>
         </nav>
       </header>
       <main className="app-main">
