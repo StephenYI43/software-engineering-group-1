@@ -25,7 +25,7 @@ IMAGE = (
 
 
 @pytest.fixture(scope="session")
-def postgres_url() -> Iterator[str]:
+def postgres_instance() -> Iterator[tuple[str, str | None]]:
     """CI owns an ephemeral container; local runs require an explicit test URL.
 
     No workflow edit or third-party testcontainers dependency is required. CI
@@ -33,7 +33,7 @@ def postgres_url() -> Iterator[str]:
     """
     configured = os.getenv("TEST_DATABASE_URL", "")
     if configured:
-        yield configured
+        yield configured, None
         return
     if os.getenv("GITHUB_ACTIONS") != "true":
         pytest.skip("TEST_DATABASE_URL not set; no PostgreSQL test was run")
@@ -91,7 +91,7 @@ def postgres_url() -> Iterator[str]:
                 if attempt == 39:
                     raise RuntimeError("CI PostgreSQL did not become ready") from None
                 time.sleep(0.5)
-        yield url
+        yield url, name
     finally:
         # Exact generated name; no user databases, volumes or containers touched.
         subprocess.run(
@@ -100,6 +100,11 @@ def postgres_url() -> Iterator[str]:
             capture_output=True,
             timeout=20,
         )
+
+
+@pytest.fixture(scope="session")
+def postgres_url(postgres_instance: tuple[str, str | None]) -> str:
+    return postgres_instance[0]
 
 
 @pytest.fixture
