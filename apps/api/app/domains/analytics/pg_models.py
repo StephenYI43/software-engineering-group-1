@@ -1,7 +1,7 @@
-"""analytics 域 B 批先落地四张表的 ORM 映射（只读 feed + 三张管理表 + 日统计）。
+"""analytics 域的 ORM 映射（只读 feed + 三张管理表 + 日统计 + 报告快照/任务）。
 
 形状来源：``docs/database-design/schema.sql``（PR #79，head 8061f4b）与
-《第一组 数据库设计.docx》表 5-35/36/37/40；摄取协议见同文档 §4.3 与
+《第一组 数据库设计.docx》表 5-35/36/37/38/39/40；摄取协议见同文档 §4.3 与
 ``docs/database-design/decisions.md``「不漏迟到提交的账本协议」。
 
 边界说明（如实记录）：
@@ -13,8 +13,8 @@
   不写该表、不生成它的迁移。
 - 迁移：本批不提交 Alembic revision（单链由 M5 协调登记）；
   测试用 ``create_all`` 建表，仅限显式可丢弃的临时测试库。
-- 报告快照与任务表（schema.sql 表 5-38/39）按 M1 2026-10-24 指令后排，
-  本批不建模型。
+- 报告快照与任务表（schema.sql 表 5-38/39）随 #65 C 批第一批落地，
+  语义见 ``packages/contracts/analytics/report-api.md``。
 """
 
 from __future__ import annotations
@@ -198,6 +198,127 @@ class AnalyticsQuarantinedEvent(AnalyticsBase):
         DateTime(timezone=True), server_default=func.current_timestamp()
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AnalyticsReportSnapshot(AnalyticsBase):
+    """个人/班级成长报告快照（表 5-38）。
+
+    快照生成后不可变（审计事实）；(consumer, 目标, 周期) 唯一
+    （UNIQUE NULLS NOT DISTINCT），重复请求复用既有行。
+    metrics jsonb 的 CHECK 强制 ``schemaVersion = "1.0"``（契约
+    ``packages/contracts/analytics/report-api.md``「快照生成语义」）。
+    """
+
+    __tablename__ = "analytics_report_snapshots"
+    __table_args__ = (
+        CheckConstraint("length(id) > 0", name="id_nonempty"),
+        CheckConstraint("period_end > period_start", name="period_order"),
+        CheckConstraint(
+            "jsonb_typeof(metrics) = 'object' "
+            "AND (metrics->>'schemaVersion') IS NOT DISTINCT FROM '1.0'",
+            name="metrics_schema_version",
+        ),
+        CheckConstraint("sample_count >= 0", name="sample_count_nonneg"),
+        CheckConstraint(
+            "(student_user_id IS NOT NULL)::integer + (class_id IS NOT NULL)::integer = 1",
+            name="target_exactly_one",
+        ),
+        UniqueConstraint(
+            "consumer_id",
+            "student_user_id",
+            "class_id",
+            "period_start",
+            "period_end",
+            postgresql_nulls_not_distinct=True,
+        ),
+        Index("ix_analytics_report_snapshots_consumer_id", "consumer_id"),
+        Index("ix_analytics_report_snapshots_student_user_id", "student_user_id"),
+        Index("ix_analytics_report_snapshots_class_id", "class_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    consumer_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("analytics_consumers.id", ondelete="RESTRICT"),
+    )
+    student_user_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    class_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("classes.id", ondelete="RESTRICT")
+    )
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    sample_count: Mapped[int] = mapped_column()
+    data_through: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp()
+    )
+
+
+class ReportJob(AnalyticsBase):
+    """报告任务（表 5-39）。
+
+    (requested_by_user_id, idempotency_key) 唯一承载 R02 幂等：同键同参返回
+    既有 Job，同键换参由服务层抛 409。CHECK 强制：终态（succeeded/failed/
+    cancelled）必有 finished_at；succeeded 必有 report_id。本批无 worker 队列，
+    任务在创建事务内 queued → succeeded 瞬时完成，不伪造 running/started_at。
+    """
+
+    __tablename__ = "report_jobs"
+    __table_args__ = (
+        CheckConstraint("length(id) > 0", name="id_nonempty"),
+        CheckConstraint("period_end > period_start", name="period_order"),
+        CheckConstraint(
+            "(student_user_id IS NOT NULL)::integer + (class_id IS NOT NULL)::integer = 1",
+            name="target_exactly_one",
+        ),
+        CheckConstraint(
+            "status IN ('queued','running','succeeded','failed','cancelled')", name="status_enum"
+        ),
+        CheckConstraint(
+            "(status IN ('succeeded','failed','cancelled')) = (finished_at IS NOT NULL)",
+            name="finished_iff_terminal",
+        ),
+        CheckConstraint(
+            "status <> 'succeeded' OR report_id IS NOT NULL", name="succeeded_has_report"
+        ),
+        UniqueConstraint("requested_by_user_id", "idempotency_key"),
+        Index("ix_report_jobs_requested_by_user_id", "requested_by_user_id"),
+        Index("ix_report_jobs_student_user_id", "student_user_id"),
+        Index("ix_report_jobs_class_id", "class_id"),
+        Index("ix_report_jobs_consumer_id", "consumer_id"),
+        Index("ix_report_jobs_report_id", "report_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    requested_by_user_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    student_user_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    class_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("classes.id", ondelete="RESTRICT")
+    )
+    consumer_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("analytics_consumers.id", ondelete="RESTRICT"),
+    )
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default="queued", server_default="queued")
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    report_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("analytics_report_snapshots.id", ondelete="RESTRICT"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.current_timestamp()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 def _build_learning_events() -> Any:
