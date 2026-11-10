@@ -63,5 +63,11 @@ jobs:
       - name: Tests
         run: pnpm test
 
+      - name: Data dictionary regression tests
+        run: node --test scripts/check-data-dictionary.test.mjs
+
+      - name: M2 data dictionary format
+        run: pnpm exec prettier --check --ignore-path .gitignore docs/data-model/student.md docs/data-model/acceptance.md
+
       - name: Build
         run: pnpm build
