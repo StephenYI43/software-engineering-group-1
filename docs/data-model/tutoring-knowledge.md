@@ -49,10 +49,11 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 3. **外键**默认 `ON DELETE RESTRICT`；只有「派生数据」和「随父记录明确清除」的关系才用 `CASCADE`。
    跨域外键（`users`、`courses`）由 M1/M5 先建表，M3 只引用，**不直接写其他领域的表**。
 4. **业务写入必须在事务内**，仓储层不自行 `commit`；状态终态只允许一次迁移
-   （`active → completed | aborted | errored`），之后不可回退。
+   （`active → completed | aborted`），之后不可回退。
+   SSE `error` 同样落库为 `aborted`，用 `abort_reason` 与 `error_code` 区分原因（见 Q8）。
    `stopped`/`client_disconnect` 等**契约传输语义**通过 `abort_reason` 细分，
-   持久化公共状态必须能存契约要求的 `aborted`（见 `sse-events.md`），
-   **不得**把 PR #62 内存里的 `stopped`/`disconnected` 直接升成持久化枚举。
+   持久化公共状态必须能存契约要求的 `aborted`（见 `sse-events.md` 与 PR #79），
+   **不得**把 PR #62 内存里的 `stopped`/`disconnected`/`errored` 直接升成持久化枚举。
 5. **授权不是外键**。物理 FK 只能保证「引用的行存在」，不能证明「调用者有权访问」；
    资源归属与课程/班级访问由服务端鉴权与 M5 花名册判定（`packages/contracts/platform/README.md`）。
 6. **模型输出与上传文档都是数据，不是指令**。`documents.title`、`assistant_content`、
@@ -181,9 +182,9 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 | seq                     | 会话内第几轮提问（**不是** SSE 事件序号）        | integer                    | 否   | 无；服务端在会话行锁/事务内分配                    | `>0`；`UNIQUE(session_id, seq)` 兜底并发；不保证与 `id` 顺序一致                         | `UNIQUE(session_id, seq)` 之一                                     |
 | request_id              | 创建本轮的请求追踪号                             | varchar(36)                | 否   | 无；服务端生成                                     | `req_`+32 位小写 hex；不采用外部自报的 `X-Request-ID`                                    | 无（非键）；日志追踪用                                             |
 | student_content         | 学生本轮提问                                     | text                       | 否   | 无                                                 | 长度 1..2000 字符（契约请求上限）；敏感数据，不写日志、不进他人响应                      | 无（非键）                                                         |
-| assistant_content       | 本轮已生成正文；未完成时可为部分文本             | text                       | 是   | NULL                                               | completed 时必须非空；aborted/errored 时保留已生成片段（可为 NULL）；与已发出 `delta.textDelta` 拼接逐字节相等；可尾随 `\n`；S1 不另做截断清理 | 无（非键）                                                         |
+| assistant_content       | 本轮已生成正文；未完成时可为部分文本             | text                       | 是   | NULL                                               | completed 时必须非空；aborted 时保留已生成片段（可为 NULL）；与已发出 `delta.textDelta` 拼接逐字节相等；可尾随 `\n`；S1 不另做截断清理 | 无（非键）                                                         |
 | stage                   | 本轮**冻结**的教学阶段                           | varchar(16)                | 否   | 无                                                 | CHECK IN(`thought`,`hint`,`step`,`summary`)；由服务端状态机在 claim 时确定，非模型输出   | 无（非键）                                                         |
-| status                  | 轮次状态                                         | varchar(16)                | 否   | `'active'`                                         | CHECK IN(`active`,`completed`,`aborted`,`errored`)；终态不可回退；停止/断连必须落 `aborted`（对齐 `sse-events.md`） | 无（非键）；见下方部分唯一索引                                     |
+| status                  | 轮次状态                                         | varchar(16)                | 否   | `'active'`                                         | CHECK IN(`active`,`completed`,`aborted`)；终态不可回退；停止/断连/SSE `error` 都必须落 `aborted`（对齐 `sse-events.md` 与 PR #79） | 无（非键）；见下方部分唯一索引                                     |
 | is_complete             | 是否构成完整回答                                 | boolean                    | 否   | false                                              | 必须与 `status = 'completed'` 严格一致                                                   | 无（非键）                                                         |
 | is_mock                 | 是否由离线假模型生成                             | boolean                    | 否   | 无                                                 | 如实反映来源；须与所用 `model_config_versions.is_mock` 一致                              | 无（非键）                                                         |
 | has_evidence            | 本轮是否检索到依据                               | boolean                    | 否   | false                                              | false ⟺ 该轮 `turn_citations` 为空（跨表，服务层保证）                                   | 无（非键）                                                         |
@@ -195,8 +196,8 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 | input_tokens            | 上游报告的输入 token 数                          | integer                    | 是   | NULL                                               | `>=0`；上游未报告时为 NULL，**不能填 0 冒充已知**                                        | 无（非键）                                                         |
 | output_tokens           | 上游报告的输出 token 数                          | integer                    | 是   | NULL                                               | `>=0`；同上                                                                              | 无（非键）                                                         |
 | duration_ms             | 本轮服务端耗时                                   | integer                    | 是   | NULL                                               | `>=0`；仅用于评测与排障，不作为计费依据                                                  | 无（非键）                                                         |
-| abort_reason            | 中断内部原因（停止/断连/重启结算）               | varchar(32)                | 是   | NULL                                               | CHECK IN(`client_stop`,`client_disconnect`,`server_restart`)；非空 ⟺ `status='aborted'`；对应 SSE `stopped.reason` 或进程恢复结算 | 无（非键）                                                         |
-| error_code              | 流内错误码                                       | varchar(32)                | 是   | NULL                                               | CHECK IN(`MODEL_OUTPUT_INVALID`,`MODEL_REFUSED`,`MODEL_TIMEOUT`,`RETRIEVAL_UNAVAILABLE`,`TURN_ABORTED`)；非空 ⟺ `status='errored'` | 无（非键）                                                         |
+| abort_reason            | 中断内部原因（停止/断连/模型或检索失败/重启结算） | varchar(32)                | 是   | NULL                                               | CHECK IN(`client_stop`,`client_disconnect`,`model_error`,`retrieval_error`,`server_restart`)；非空 ⟺ `status='aborted'`；停止/断连/重启见 Q8，SSE `error` 用 `model_error` 或 `retrieval_error` | 无（非键）                                                         |
+| error_code              | 流内错误码                                       | varchar(32)                | 是   | NULL                                               | CHECK IN(`MODEL_OUTPUT_INVALID`,`MODEL_REFUSED`,`MODEL_TIMEOUT`,`RETRIEVAL_UNAVAILABLE`,`TURN_ABORTED`)；非空仅当 `status='aborted'`（`error_code IS NULL OR status='aborted'`）；停止/断连/重启通常为空，模型/检索失败必须非空，见 Q8 | 无（非键）                                                         |
 | error_reason            | 错误内部原因码（如 `response_envelope_parse_failed`） | varchar(64)                | 是   | NULL                                               | 只允许登记的原因码；不得写入模型输出正文、堆栈或密钥                                     | 无（非键）                                                         |
 | created_at              | 轮次创建（claim）时刻                            | timestamptz(6)             | 否   | CURRENT_TIMESTAMP                                  | UTC                                                                                      | 无（非键）                                                         |
 | settled_at              | 进入终态的时刻                                   | timestamptz(6)             | 是   | NULL                                               | `active` 时必须为 NULL；终态时必须非空且 `>= created_at`                                 | 无（非键）                                                         |
@@ -207,8 +208,9 @@ PR #62 的状态保存在**进程内仓库** `repository.py` 的 `InMemoryTutori
 - `CHECK ((status = 'completed') = is_complete)`。
 - `CHECK ((status = 'active') = (settled_at IS NULL))`。
 - `CHECK ((status = 'aborted') = (abort_reason IS NOT NULL))`。
-- `CHECK ((status = 'errored') = (error_code IS NOT NULL))`。
-- `CHECK (status = 'errored' OR error_reason IS NULL)`。
+- `CHECK (error_code IS NULL OR status = 'aborted')`。
+- `CHECK (error_reason IS NULL OR error_code IS NOT NULL)`。
+- `CHECK (abort_reason NOT IN ('model_error','retrieval_error') OR error_code IS NOT NULL)`。
 - `CHECK (status <> 'completed' OR (assistant_content IS NOT NULL AND emotion IS NOT NULL AND action IS NOT NULL))`。
 - `CHECK (emotion IS NULL OR emotion IN ('neutral','encouraging','thinking','celebrating'))`。
 - `CHECK (action IS NULL OR action IN ('idle','nod','point','write'))`。
@@ -225,7 +227,8 @@ PR #62 内存仓库里的 `stopped` / `disconnected` / `errored` **不是**可�
 | `completed` | `completed` | `true` | `abort_reason`/`error_code` 均为 NULL | 必须非空；与全部 delta 拼接一致 |
 | SSE `stopped`（`reason=client_stop`） | `aborted` | `false` | `abort_reason='client_stop'` | **保留**已生成片段；若尚未产生任何 delta 则为 NULL |
 | 客户端断连（`client_disconnect`） | `aborted` | `false` | `abort_reason='client_disconnect'` | 同上；断连**不**下发 SSE `stopped` 事件，但库内仍记 `aborted` |
-| SSE `error` | `errored` | `false` | `error_code` + 可选 `error_reason` | 保留已生成片段或 NULL |
+| SSE `error`（模型失败） | `aborted` | `false` | `abort_reason='model_error'` + `error_code`（`MODEL_OUTPUT_INVALID` / `MODEL_REFUSED` / `MODEL_TIMEOUT`）+ 可选 `error_reason` | 保留已生成片段或 NULL |
+| SSE `error`（检索失败） | `aborted` | `false` | `abort_reason='retrieval_error'` + `error_code='RETRIEVAL_UNAVAILABLE'` + 可选 `error_reason` | 同上 |
 | 进程重启后仍为 `active` 的遗留轮 | `aborted` | `false` | `abort_reason='server_restart'` | 保留当时已落库的片段或 NULL |
 
 **正文是否保留**：保留。中断/失败轮的半截正文写入（或保留）`assistant_content`，供学生回看，
@@ -236,17 +239,30 @@ PR #62 内存仓库里的 `stopped` / `disconnected` / `errored` **不是**可�
 也不得把半截正文改写成完成态。
 
 **清理规则**：中断轮次为追加式记录，常规不物理删除；随会话显式清除时级联。
-不因 `aborted`/`errored` 自动清空 `assistant_content`。保留期限仍见文末「待确认」（学校要求未到）。
+不因 `aborted` 自动清空 `assistant_content`。保留期限仍见文末「待确认」（学校要求未到）。
 
-**恢复/历史展示**：列表与详情必须按 `is_complete=false`（及 `status ∈ {aborted,errored}`）展示为**未完成**；
+**恢复/历史展示**：列表与详情必须按 `is_complete=false`（及 `status='aborted'`）展示为**未完成**；
 不得渲染为完整回答；不渲染引用/追问为「本轮有效教学结果」。S1 **只支持整轮重试，不支持断点续传**
 （与 `sse-events.md` / M2 确认一致）。
 
-**阶段**：仅 `status='completed'` 的轮次可推进 `current_stage`；`aborted`/`errored` 一律不推进。
+**阶段**：仅 `status='completed'` 的轮次可推进 `current_stage`；所有 `aborted`（含停止、断连、模型/检索失败、重启结算）一律不推进。
 
 **重启遗留 `active`**：启动恢复或迁移后的结算任务必须把仍为 `active` 且已无对应进程的轮次
 一次迁移为 `aborted` + `abort_reason='server_restart'` + `settled_at=now()` + `is_complete=false`，
 释放部分唯一索引，避免会话永久 409。不得静默标成 `completed`。
+
+**SSE `error` 与 `error_code` 对应（对齐 PR #79）**：流内仍发送契约 `error` 事件，`isComplete=false`、阶段不推进；
+数据库不设 `errored` 状态。`abort_reason` 取失败类别，`error_code` 取契约错误码：
+
+- `MODEL_OUTPUT_INVALID` / `MODEL_REFUSED` / `MODEL_TIMEOUT` → `abort_reason='model_error'`。
+- `RETRIEVAL_UNAVAILABLE` → `abort_reason='retrieval_error'`。
+- `TURN_ABORTED` 仅当流内以 `error` 事件报告中断、且契约 `error.code` 就是 `TURN_ABORTED` 时使用
+  （例如停止/结算路径失败）；此时 `status` 仍为 `aborted`，`abort_reason` 取实际中断原因
+  （通常为 `client_stop` / `client_disconnect` / `server_restart`）。
+  正常的 SSE `stopped` 或断连结算**不**写 `error_code`。
+- `error_reason` 只记录已登记的内部原因码（如 `response_envelope_parse_failed`），不得写入模型正文、堆栈或密钥；
+  仅在 `error_code` 非空时允许非空。
+
 
 ## turn_citations
 
@@ -508,14 +524,14 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
 | `hasEvidence` | `tutoring_turns.has_evidence` | 与 citation 是否为空一致 |
 | `followUps` | `tutoring_turns.follow_ups.items` | 至多 3 条 |
 | `emotion` / `action` | `tutoring_turns.emotion` / `action` | 冻结枚举见 `avatar-controller.md`；completed 时必填 |
-| SSE `stopped.reason` | `tutoring_turns.abort_reason` | 仅 `aborted`；取值 `client_stop` / `client_disconnect`（另有结算用 `server_restart`） |
-| 持久化轮次状态 | `tutoring_turns.status` | `active`/`completed`/`aborted`/`errored`；停止与断连均为 `aborted`，不是 `stopped`/`disconnected` |
+| SSE `stopped.reason` / 断连与结算 | `tutoring_turns.abort_reason` | 仅 `aborted`；停止/断连/重启为 `client_stop` / `client_disconnect` / `server_restart`；SSE `error` 为 `model_error` 或 `retrieval_error` |
+| 持久化轮次状态 | `tutoring_turns.status` | `active`/`completed`/`aborted`（与 PR #79 一致）；停止、断连与 SSE `error` 均为 `aborted`，不是 `stopped`/`disconnected`/`errored` |
 | `isComplete` | `tutoring_turns.is_complete` | 与 `status='completed'` 严格一致 |
 | `isMock` | `tutoring_turns.is_mock` | 与模型配置一致 |
 | `promptVersion` | `prompt_versions.version_label`（联表） | 不直接暴露内部 `id` |
 | `createdAt` | `tutoring_turns.settled_at` | PR #62 对完成响应取装配时刻；持久化后取终态时刻，语义一致 |
 | SSE 事件 `seq` | 不持久化 | 流内计数，每次请求重新从 1 开始 |
-| SSE `error.code` | `tutoring_turns.error_code` | 仅 `errored` 轮次有值 |
+| SSE `error.code` | `tutoring_turns.error_code` | 仅 `aborted` 且因模型/检索失败（或流内 `TURN_ABORTED`）时有值；停止/断连/重启通常为 NULL |
 | SSE `error.details.reason` | `tutoring_turns.error_reason` | 内部原因码 |
 | SSE `error.requestId` | `tutoring_turns.request_id` | 创建轮次的请求号 |
 
@@ -554,8 +570,9 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
 1. 学生 A 读取学生 B 的会话或轮次：查询返回 404 或 0 行；不能通过修改路径参数绕过归属检查。
 2. 同一会话并发发起两个提问：第二个因 `UNIQUE(session_id) WHERE status='active'` 失败并返回 409；
    实际只有一轮 `completed`，阶段只推进一级。
-3. `aborted`（含停止/断连/重启结算）与 `errored` 轮次不推进 `tutoring_sessions.current_stage`
+3. 所有 `aborted` 轮次（含停止/断连/模型或检索失败/重启结算）不推进 `tutoring_sessions.current_stage`
    （`status <> 'completed'`，服务层断言）；半截 `assistant_content` 不得被展示或统计为完成回答。
+   不得再写入持久化状态 `errored`；SSE `error` 必须落为 `aborted` + 对应 `abort_reason`/`error_code`。
 3b. 进程重启后遗留的 `active` 轮必须结算为 `aborted` + `abort_reason='server_restart'`，
     不得长期占用 `UNIQUE(session_id) WHERE status='active'`。
 4. `hasEvidence=false` 的轮次没有 citation 行；`hasEvidence=true` 的轮次至少一条 citation，
@@ -609,7 +626,7 @@ JSONB 不是自由正文容器。下列属性必须由版本化 schema 严格校
   每行恰好 7 列、表头与 #69 的七要素模板一致。
 - 逐条核对字段与 `packages/contracts/tutoring/`、`packages/contracts/avatar/avatar-controller.md`
   （已合并）及 `apps/api/app/domains/tutoring/`（PR #62 分支，未合并）的取值；
-  持久化状态已与 `sse-events.md` 的 `aborted` 对齐，不再沿用内存枚举作公共基线。
+  持久化状态已与 `sse-events.md` 及 PR #79 对齐为 `active`/`completed`/`aborted`，SSE `error` 不再使用独立的 `errored` 持久化状态。
 - 九张实体表均以**二级标题**登记（与 #75 `platform.md` 一致），避免「业务表/管理表」被检查器当表名；
   M2 在 #74 亦已支持三级实体标题，两种结构均可被登记，本文件采用二级实体标题以消除歧义。
 - 链接与路径检查：本文引用的是仓库相对路径；`docs/data-model/` 下基线文件由 #73/#74/#75 等引入，
