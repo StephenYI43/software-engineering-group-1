@@ -51,6 +51,8 @@ def create_schema(engine: Engine) -> None:
     """在临时测试库建最小 schema（先删后建，保证测试独立）。"""
     with engine.begin() as conn:
         for ddl in (
+            "DROP TABLE IF EXISTS report_jobs CASCADE",
+            "DROP TABLE IF EXISTS analytics_report_snapshots CASCADE",
             "DROP TABLE IF EXISTS analytics_quarantined_events CASCADE",
             "DROP TABLE IF EXISTS analytics_daily_metrics CASCADE",
             "DROP TABLE IF EXISTS analytics_processed_events CASCADE",
