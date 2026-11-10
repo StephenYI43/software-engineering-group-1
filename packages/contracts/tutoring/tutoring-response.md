@@ -129,18 +129,17 @@
    M2 在 `isMock=true` 时应显示明确标识，不得呈现为真实模型结果。
 7. **`stage` 不得由模型输出决定**，只能由服务端状态机计算。
 
-## emotion / action 取值（占位，待 M4 冻结）
+## emotion / action 取值（已按 M4 冻结枚举对齐）
 
-> 这两组值**尚未确定**。`docs/tasks/m3.md:23` 与 `docs/tasks/m4.md:23` 对定义权互相矛盾。
-> 下表仅为占位，用于让样例可读。**M4 给出正式枚举前，本契约不是最终版。**
+取值以 `packages/contracts/avatar/avatar-controller.md` 的冻结全集为准，本契约不再当作占位：
 
-| 字段 | 占位取值 |
+| 字段 | 取值 |
 | --- | --- |
 | `emotion` | `neutral` / `encouraging` / `thinking` / `celebrating` |
 | `action` | `idle` / `nod` / `point` / `write` |
 
-建议的分工（待确认）：**M4 定义枚举取值**（他们知道形象能渲染什么），
-**M3 定义教学情境到取值的映射**并校验模型输出是否落在 M4 的枚举内。
+分工已确认：**M4 定义枚举取值**，**M3 定义教学情境到取值的映射**，并校验模型输出是否落在该枚举内。
+非法取值不得作为完成轮次落库；播报侧另有降级规则（见 avatar-controller「降级规则」）。
 
 ## ID 约定（待 M1 的共享基础契约确认）
 
