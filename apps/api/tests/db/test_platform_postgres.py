@@ -35,7 +35,7 @@ REQUEST_ID = "req_" + "1" * 32
 
 def test_migration_single_head_and_round_trip(database: Database) -> None:
     config = Config(str(ROOT / "alembic.ini"))
-    assert ScriptDirectory.from_config(config).get_heads() == ["0003_external_identities"]
+    assert ScriptDirectory.from_config(config).get_heads() == ["0004_media_preferences"]
     command.check(config)
     assert set(inspect(database.engine).get_table_names()) == {
         *Base.metadata.tables,
@@ -104,7 +104,7 @@ def test_config_upgrade_rejects_legacy_null_without_rewriting_valid_rows(
     with database.sessions() as session:
         assert (
             session.scalar(text("SELECT version_num FROM alembic_version"))
-            == "0003_external_identities"
+            == "0004_media_preferences"
         )
         assert session.get(SystemConfigVersion, valid_id).value == good
 
