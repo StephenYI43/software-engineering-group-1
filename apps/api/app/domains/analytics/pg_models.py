@@ -172,8 +172,8 @@ class AnalyticsQuarantinedEvent(AnalyticsBase):
             "(status = 'resolved') = (resolved_at IS NOT NULL)", name="resolved_iff_resolved_at"
         ),
         CheckConstraint(
-            "status <> 'resolved' OR resolved_by_user_id IS NOT NULL",
-            name="resolved_has_resolver",
+            "status NOT IN ('retry_ready','resolved') OR resolved_by_user_id IS NOT NULL",
+            name="authorized_status_has_resolver",
         ),
     )
 
@@ -189,7 +189,7 @@ class AnalyticsQuarantinedEvent(AnalyticsBase):
     status: Mapped[str] = mapped_column(String(32), default="open", server_default="open")
     attempts: Mapped[int] = mapped_column(default=1, server_default="1")
     resolved_by_user_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("users.id", ondelete="SET NULL")
+        String(64), ForeignKey("users.id", ondelete="RESTRICT")
     )
     first_failed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.current_timestamp()

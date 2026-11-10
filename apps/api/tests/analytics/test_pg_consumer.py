@@ -18,9 +18,10 @@ from typing import Any
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.domains.analytics.pg_consumer import AnalyticsPgWorker, ConsumerBusy
+from app.domains.analytics.pg_consumer import AnalyticsPgWorker, ConsumerBusy, SourceFactChanged
 from app.domains.analytics.pg_models import (
     AnalyticsConsumer,
     AnalyticsDailyMetric,
@@ -247,7 +248,7 @@ def test_no_class_event_not_copied_to_classes(pg_engine: Engine) -> None:
 
 def test_poison_event_quarantine_and_replay(pg_engine: Engine) -> None:
     """毒事件：校验失败进 open 隔离、被反连接排除；retry_ready 后重放 resolved。"""
-    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT])
+    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT, RESOLVER])
     insert_event(
         pg_engine,
         event_id="event_" + "b" * 32,
@@ -277,18 +278,16 @@ def test_poison_event_quarantine_and_replay(pg_engine: Engine) -> None:
     # open 隔离被反连接排除：再次轮询不重复登记
     again = worker.poll_once("teacher-overview", "v1")
     assert again.scanned == 0 and again.quarantined == 0
-    # 人工审计置 retry_ready；重放仍失败则 attempts 递增且回到 open
-    assert worker.retry_quarantined("teacher-overview", "v1", "bad_event", "user_" + "f" * 32)
+    # 人工审计置 retry_ready（操作者持久化到隔离行）；重放仍失败则 attempts 递增且回到 open
+    assert worker.retry_quarantined("teacher-overview", "v1", "bad_event", RESOLVER)
     retry_fail = worker.poll_once("teacher-overview", "v1")
     assert retry_fail.quarantined == 1
     with Session(pg_engine) as s, s.begin():
         q = s.execute(select(AnalyticsQuarantinedEvent)).scalar_one()
         assert q.status == "open" and q.attempts == 2
-    # 修复源（此处以符合契约的新事件替代演示 resolved 路径不可伪造——
-    # 源事件不可变，真实修复走 M5；此处断言 retry_ready 不被误报 resolved）
-    with Session(pg_engine) as s, s.begin():
-        q = s.execute(select(AnalyticsQuarantinedEvent)).scalar_one()
-        assert q.resolved_at is None and q.resolved_by_user_id is None
+        # 回到 open 后保留最近一次授权操作者（行内审计事实），resolved_at 仍为空
+        assert q.resolved_by_user_id == RESOLVER
+        assert q.resolved_at is None
 
 
 def test_poison_event_resolved_on_success_replay(pg_engine: Engine) -> None:
@@ -400,3 +399,197 @@ def test_restart_preserves_consumer_state(pg_engine: Engine) -> None:
         consumer = s.execute(select(AnalyticsConsumer)).scalar_one()
         assert consumer.processed_count == 1
         assert _daily(s, consumer.id).submission_count == 1
+
+
+def test_retry_ready_requires_persisted_resolver(pg_engine: Engine) -> None:
+    """约束层：retry_ready/resolved 必须持久记录授权操作者（authorized_status_has_resolver）。
+
+    行先以合法 open 状态落库（FK 均满足），再 UPDATE 置 retry_ready——
+    此刻只有 CHECK 约束可失败，证明约束真实存在。
+    """
+    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT])
+    event_id = "event_" + "1" * 32
+    insert_event(
+        pg_engine,
+        event_id=event_id,
+        event_type="chapter_viewed",
+        user_id=STUDENT,
+        course_id=COURSE,
+        class_id=CLASS_A,
+        occurred_at=BASE,
+        payload={"chapterId": "c1"},
+    )
+    _worker(pg_engine).poll_once("teacher-overview", "v1")  # 创建 consumer 行
+    with pg_engine.begin() as conn:  # 合成 open 隔离行（FK 全部满足）
+        conn.execute(
+            text(
+                "INSERT INTO analytics_quarantined_events "
+                "(id, consumer_id, event_id, error_code, status, attempts) "
+                "SELECT 'quarantine_x', c.id, :e, 'schema_violation', 'open', 1 "
+                "FROM analytics_consumers AS c LIMIT 1"
+            ),
+            {"e": event_id},
+        )
+    with pytest.raises(IntegrityError):
+        with pg_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE analytics_quarantined_events SET status = 'retry_ready' "
+                    "WHERE id = 'quarantine_x'"
+                )
+            )
+
+
+def test_replay_operator_survives_worker_restart(pg_engine: Engine) -> None:
+    """重启重放：retry_ready 由 worker A 授权，重启后的 worker 重放成功仍读取行内操作者。"""
+    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT, RESOLVER])
+    bad_id = "event_" + "c" * 32
+    insert_event(
+        pg_engine,
+        event_id=bad_id,
+        event_type="bogus_type",
+        user_id=STUDENT,
+        course_id=COURSE,
+        class_id=CLASS_A,
+        occurred_at=BASE,
+        payload={"chapterId": "c1"},
+    )
+    worker_a = _worker(pg_engine)
+    assert worker_a.poll_once("teacher-overview", "v1").quarantined == 1
+    assert worker_a.retry_quarantined("teacher-overview", "v1", bad_id, RESOLVER)
+    with Session(pg_engine) as s, s.begin():  # retry_ready 阶段操作者已持久化
+        q = s.execute(select(AnalyticsQuarantinedEvent)).scalar_one()
+        assert q.status == "retry_ready" and q.resolved_by_user_id == RESOLVER
+        assert q.resolved_at is None
+    with pg_engine.begin() as conn:  # 受控重放前的上游修复（合成替身；id 不变）
+        conn.execute(
+            text("UPDATE learning_events SET event_type = 'chapter_viewed' WHERE id = :i"),
+            {"i": bad_id},
+        )
+    worker_b = _worker(pg_engine)  # 全新 worker 实例（模拟重启，无任何进程内身份）
+    result = worker_b.poll_once("teacher-overview", "v1")
+    assert result.applied == 1
+    with Session(pg_engine) as s, s.begin():
+        q = s.execute(select(AnalyticsQuarantinedEvent)).scalar_one()
+        assert q.status == "resolved" and q.resolved_by_user_id == RESOLVER
+        assert q.resolved_at is not None
+
+
+def test_two_operators_replay_identity_not_mixed(pg_engine: Engine) -> None:
+    """两个 worker/两个请求并行授权：resolved 操作者各读各的隔离行，不串用。"""
+    op_a = "user_" + "e" * 32  # RESOLVER
+    op_b = "user_" + "f" * 32
+    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT, op_a, op_b])
+    bad1 = "event_" + "c" * 32
+    bad2 = "event_" + "d" * 32
+    for bad_id in (bad1, bad2):
+        insert_event(
+            pg_engine,
+            event_id=bad_id,
+            event_type="bogus_type",
+            user_id=STUDENT,
+            course_id=COURSE,
+            class_id=CLASS_A,
+            occurred_at=BASE,
+            payload={"chapterId": "c1"},
+        )
+    worker_a = _worker(pg_engine)
+    worker_b = _worker(pg_engine)
+    assert worker_a.poll_once("teacher-overview", "v1").quarantined == 2
+    assert worker_a.retry_quarantined("teacher-overview", "v1", bad1, op_a)
+    assert worker_b.retry_quarantined("teacher-overview", "v1", bad2, op_b)
+    with pg_engine.begin() as conn:  # 上游修复两个事件（合成替身；id 不变）
+        conn.execute(
+            text("UPDATE learning_events SET event_type = 'chapter_viewed'"),
+        )
+    result = _worker(pg_engine).poll_once("teacher-overview", "v1")
+    assert result.applied == 2
+    with Session(pg_engine) as s, s.begin():
+        rows = {
+            q.event_id: q.resolved_by_user_id
+            for q in s.execute(select(AnalyticsQuarantinedEvent)).scalars().all()
+        }
+        assert rows[bad1] == op_a and rows[bad2] == op_b  # 身份按行落位，无串用
+
+
+def test_resolver_fk_restrict_protects_resolved_rows(pg_engine: Engine) -> None:
+    """操作者外键 RESTRICT：resolved 行的操作者不可被删（不靠 SET NULL 破坏结算）。"""
+    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT, RESOLVER])
+    bad_id = "event_" + "c" * 32
+    insert_event(
+        pg_engine,
+        event_id=bad_id,
+        event_type="bogus_type",
+        user_id=STUDENT,
+        course_id=COURSE,
+        class_id=CLASS_A,
+        occurred_at=BASE,
+        payload={"chapterId": "c1"},
+    )
+    worker = _worker(pg_engine)
+    assert worker.poll_once("teacher-overview", "v1").quarantined == 1
+    with pg_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE learning_events SET event_type = 'chapter_viewed' WHERE id = :i"),
+            {"i": bad_id},
+        )
+    assert worker.retry_quarantined("teacher-overview", "v1", bad_id, RESOLVER)
+    assert worker.poll_once("teacher-overview", "v1").applied == 1
+    with pytest.raises(IntegrityError), pg_engine.begin() as conn:
+        conn.execute(text("DELETE FROM users WHERE id = :i"), {"i": RESOLVER})
+
+
+def test_source_fact_change_rolls_back_round(pg_engine: Engine) -> None:
+    """源事实漂移：重算复核 learning-feed-sha256-v1 摘要不符 → SOURCE_FACT_CHANGED 回滚本轮。
+
+    不覆盖旧账本摘要、不重复计数；恢复源事实后同事件正常重算。
+    """
+    seed_identity(pg_engine, course_id=COURSE, class_id=CLASS_A, students=[STUDENT])
+    event_id = "event_" + "1" * 32
+    insert_event(
+        pg_engine,
+        event_id=event_id,
+        event_type="assignment_submitted",
+        user_id=STUDENT,
+        course_id=COURSE,
+        class_id=CLASS_A,
+        occurred_at=BASE,
+        payload={"submissionId": "sub_1"},
+    )
+    _worker(pg_engine).poll_once("teacher-overview", "v1")
+    with Session(pg_engine) as s, s.begin():
+        original_hash = s.execute(select(AnalyticsProcessedEvent.source_hash)).scalar_one()
+    with pg_engine.begin() as conn:  # 模拟源事实被篡改（生产中应报警核查）
+        conn.execute(
+            text("UPDATE learning_events SET payload = :p WHERE id = :i"),
+            {"i": event_id, "p": '{"submissionId":"sub_2"}'},
+        )
+    insert_event(  # 同键新事件触发重算，复核旧事件摘要
+        pg_engine,
+        event_id="event_" + "2" * 32,
+        event_type="assignment_submitted",
+        user_id=STUDENT,
+        course_id=COURSE,
+        class_id=CLASS_A,
+        occurred_at=BASE + timedelta(minutes=10),
+        payload={"submissionId": "sub_3"},
+    )
+    with pytest.raises(SourceFactChanged) as excinfo:
+        _worker(pg_engine).poll_once("teacher-overview", "v1")
+    assert excinfo.value.event_id == event_id
+    with Session(pg_engine) as s, s.begin():  # 本轮已回滚：新事件未入账本、旧摘要未覆盖
+        hashes = s.execute(select(AnalyticsProcessedEvent.source_hash)).scalars().all()
+        assert len(hashes) == 1 and hashes[0] == original_hash
+        assert _daily(s, _consumer_id(s)).submission_count == 1
+    with pg_engine.begin() as conn:  # 恢复源事实后重算通过
+        conn.execute(
+            text("UPDATE learning_events SET payload = :p WHERE id = :i"),
+            {"i": event_id, "p": '{"submissionId":"sub_1"}'},
+        )
+    result = _worker(pg_engine).poll_once("teacher-overview", "v1")
+    assert result.applied == 1
+    with Session(pg_engine) as s, s.begin():
+        rows = s.execute(select(AnalyticsProcessedEvent)).scalars().all()
+        assert len(rows) == 2
+        assert {r.source_hash for r in rows} >= {original_hash}  # 旧摘要保持不变
+        assert _daily(s, _consumer_id(s)).submission_count == 2

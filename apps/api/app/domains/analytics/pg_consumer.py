@@ -10,8 +10,21 @@
 3. 每个事件在 savepoint 内应用：契约校验 → 账本插入 → 按键重算日统计；
    校验失败用 savepoint 回滚该事件并登记 ``open`` 隔离（不静默跳过）；
 4. 整轮原子提交：可证明的结果（其余事件 + 隔离记录）一起落库；
-5. 授权人工把 open 置 ``retry_ready`` 后，重放成功时
-   **ledger + 聚合 + resolved 同事务**。
+5. 授权人工把 open 置 ``retry_ready`` 时，**授权操作者持久化到隔离行**
+   （``resolved_by_user_id``）；重放成功时 ledger + 聚合 + resolved 同事务，
+   resolved 的操作者从隔离行读取——worker 重启、并发请求不得串用身份。
+   操作者外键 RESTRICT，不靠 SET NULL 破坏已结算记录（#79 decisions.md）。
+
+源事实摘要（``learning-feed-sha256-v1``，#79 decisions.md 2026-11-03 冻结）：
+
+- 字段 ``event_id/event_type/user_id/course_id/class_id/occurred_at/
+  recorded_at/trace_id/schema_version/payload`` 全量纳入，含 NULL；
+- 两个时间统一转 UTC、固定 6 位小数并以 ``Z`` 结尾（等价时刻的不同时区
+  表示摘要一致）；
+- 对象键递归排序、UTF-8、``ensure_ascii=False``、JSON 紧凑分隔符、
+  禁止 NaN/Infinity；整数保持整数；SHA256 小写 hex。
+- 迟到重算时按同协议重新计算并与账本比对，不符抛
+  ``SourceFactChanged`` 回滚本轮：不覆盖旧摘要、不重复计数。
 
 边界（如实记录）：
 
@@ -35,7 +48,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import ColumnElement, delete, select, update
+from sqlalchemy import ColumnElement, delete, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -51,6 +64,9 @@ from app.domains.analytics.pg_models import (
 
 STATS_TIMEZONE = ZoneInfo("Asia/Shanghai")
 """S1 日界时区快照；变更时区须新 consumer 版本。"""
+
+SOURCE_HASH_PROTOCOL = "learning-feed-sha256-v1"
+"""源事实摘要协议名（#79 decisions.md 2026-11-03）；算法变更须新建 consumer 版本。"""
 
 _METRIC_TZ_COLUMN = "Asia/Shanghai"
 
@@ -72,14 +88,48 @@ class ConsumerBusy(RuntimeError):
     """同一 consumer 的另一轮询仍持行锁；本轮放弃，下一轮重试。"""
 
 
+class SourceFactChanged(RuntimeError):
+    """源事实与账本摘要不符（learning-feed-sha256-v1）：本轮回滚，不覆盖旧摘要。"""
+
+    def __init__(self, event_id: str) -> None:
+        super().__init__(f"source fact changed for {event_id}: ledger hash mismatch")
+        self.event_id = event_id
+
+
 def new_id(prefix: str) -> str:
     """前缀 + 32 位小写 hex（组内冻结的 ID 格式，不解析 ID 授权）。"""
     return f"{prefix}_{uuid.uuid4().hex}"
 
 
-def _source_hash(raw: dict[str, Any]) -> str:
-    canonical = json.dumps(raw, sort_keys=True, ensure_ascii=False, default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+def _utc_micros(value: datetime) -> str:
+    """等价时刻统一为 UTC 固定 6 位小数（naive 视为 UTC；timestamptz 恒为 aware）。"""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
+
+
+def _source_hash(row: Any) -> str:
+    """learning-feed-sha256-v1：feed 行全字段规范化摘要（含 NULL），小写 hex。"""
+    canonical: dict[str, Any] = {
+        "event_id": row["id"],
+        "event_type": row["event_type"],
+        "user_id": row["user_id"],
+        "course_id": row["course_id"],
+        "class_id": row["class_id"],
+        "occurred_at": _utc_micros(row["occurred_at"]),
+        "recorded_at": None if row["recorded_at"] is None else _utc_micros(row["recorded_at"]),
+        "trace_id": row["trace_id"],
+        "schema_version": row["schema_version"],
+        "payload": row["payload"],
+    }
+    encoded = json.dumps(
+        canonical,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 class AnalyticsPgWorker:
@@ -87,8 +137,6 @@ class AnalyticsPgWorker:
 
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self._sessions = sessions
-        self._last_resolver: str | None = None
-        """最近一次 retry_quarantined 的操作者；重放成功时写入 resolved_by。"""
 
     def poll_once(
         self, consumer_key: str, algorithm_version: str, batch_size: int = 200
@@ -141,8 +189,11 @@ class AnalyticsPgWorker:
     def retry_quarantined(
         self, consumer_key: str, algorithm_version: str, event_id: str, resolver_user_id: str
     ) -> bool:
-        """人工审计后把 open 隔离置 retry_ready；授权校验由上层调用方负责。"""
-        self._last_resolver = resolver_user_id
+        """人工审计后把 open 隔离置 retry_ready，授权操作者持久化到隔离行。
+
+        授权校验由上层调用方负责；resolved 的操作者身份以本行为准，
+        worker 重启或并发请求不共享进程变量（#79 decisions.md）。
+        """
         with self._sessions() as session:
             with session.begin():
                 consumer = self._lock_consumer(session, consumer_key, algorithm_version)
@@ -155,6 +206,7 @@ class AnalyticsPgWorker:
                 if row is None:
                     return False
                 row.status = "retry_ready"
+                row.resolved_by_user_id = resolver_user_id
                 return True
 
     def _lock_consumer(self, session: Session, key: str, version: str) -> AnalyticsConsumer:
@@ -219,7 +271,7 @@ class AnalyticsPgWorker:
             AnalyticsProcessedEvent(
                 consumer_id=consumer.id,
                 event_id=row["id"],
-                source_hash=_source_hash(raw),
+                source_hash=_source_hash(row),
             )
         )
         key = key_for_event(
@@ -237,26 +289,35 @@ class AnalyticsPgWorker:
 
         迟到事件因此不按到账顺序追加：键内统计只取决于「已入账本的事实」，
         与处理顺序无关。重算后无事件的键删除行（无观测 unknown 不落库）。
+        重算同时按 learning-feed-sha256-v1 复核每个已入账本事件的源事实：
+        不符抛 ``SourceFactChanged`` 回滚本轮，不覆盖旧摘要、不重复计数。
         """
         feed = learning_events_table()
         day_start = datetime.combine(key.metric_date, datetime.min.time(), tzinfo=STATS_TIMEZONE)
         day_end = day_start + timedelta(days=1)
-        rows = session.execute(
-            select(feed.c.occurred_at, feed.c.event_type, feed.c.payload)
-            .join(
-                AnalyticsProcessedEvent,
-                (AnalyticsProcessedEvent.event_id == feed.c.id)
-                & (AnalyticsProcessedEvent.consumer_id == consumer_id),
+        rows = (
+            session.execute(
+                select(feed, AnalyticsProcessedEvent.source_hash)
+                .join(
+                    AnalyticsProcessedEvent,
+                    (AnalyticsProcessedEvent.event_id == feed.c.id)
+                    & (AnalyticsProcessedEvent.consumer_id == consumer_id),
+                )
+                .where(
+                    feed.c.user_id == key.student_user_id,
+                    _null_safe(feed.c.course_id, key.course_id),
+                    _null_safe(feed.c.class_id, key.class_id),
+                    feed.c.occurred_at >= day_start,
+                    feed.c.occurred_at < day_end,
+                )
+                .order_by(feed.c.occurred_at)
             )
-            .where(
-                feed.c.user_id == key.student_user_id,
-                _null_safe(feed.c.course_id, key.course_id),
-                _null_safe(feed.c.class_id, key.class_id),
-                feed.c.occurred_at >= day_start,
-                feed.c.occurred_at < day_end,
-            )
-            .order_by(feed.c.occurred_at)
-        ).all()
+            .mappings()
+            .all()
+        )
+        for row in rows:
+            if _source_hash(row) != row["source_hash"]:
+                raise SourceFactChanged(cast("str", row["id"]))
 
         existing = self._find_daily(session, consumer_id, key)
         if not rows:
@@ -340,20 +401,21 @@ class AnalyticsPgWorker:
         ).scalar_one_or_none()
 
     def _resolve_if_retried(self, session: Session, consumer_id: str, event_id: str) -> None:
-        """重放成功：ledger 已写、聚合已重算，此刻把 retry_ready 置 resolved（同事务）。"""
-        session.execute(
-            update(AnalyticsQuarantinedEvent)
-            .where(
+        """重放成功：ledger 已写、聚合已重算，此刻把 retry_ready 置 resolved（同事务）。
+
+        操作者身份从隔离行读取（retry_quarantined 持久化），不取进程变量。
+        """
+        row = session.execute(
+            select(AnalyticsQuarantinedEvent).where(
                 AnalyticsQuarantinedEvent.consumer_id == consumer_id,
                 AnalyticsQuarantinedEvent.event_id == event_id,
                 AnalyticsQuarantinedEvent.status == "retry_ready",
             )
-            .values(
-                status="resolved",
-                resolved_at=datetime.now(UTC),
-                resolved_by_user_id=self._last_resolver,
-            )
-        )
+        ).scalar_one_or_none()
+        if row is None:
+            return
+        row.status = "resolved"
+        row.resolved_at = datetime.now(UTC)
 
     def _quarantine(
         self, session: Session, consumer_id: str, event_id: str, error_code: str
@@ -415,6 +477,8 @@ def metric_date_of(occurred_at: datetime, tz: ZoneInfo) -> date:
 __all__ = [
     "ConsumerBusy",
     "PollResult",
+    "SourceFactChanged",
+    "SOURCE_HASH_PROTOCOL",
     "AnalyticsPgWorker",
     "STATS_TIMEZONE",
     "metric_date_of",
