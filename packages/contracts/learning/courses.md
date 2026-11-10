@@ -20,7 +20,7 @@ M6 通过本接口在教师后台管理课程。
 | `subject` | string | 是 | 学科标识，枚举见下方（含展示名） |
 | `coverImageUrl` | string \| null | 否 | 封面图 URL，由调用方净化后再渲染 |
 | `teacherId` | string | 是 | 主讲教师用户 ID，引用 M1 用户身份 |
-| `teacherName` | string \| null | 否 | 展示用教师姓名。M5 不在 `courses` 表存储姓名，按需通过 M1 用户接口解析后回填 |
+| `teacherName` | string \| null | 否 | 展示用教师姓名。M5 在授权裁剪后通过 [M1 批量解析契约](../platform/enrollment-and-teacher-names.md#服务端批量解析教师展示名) 回填 |
 | `studentCount` | integer \| null | 否 | 选课人数，列表接口可回填；详情接口可不返回 |
 | `chapterCount` | integer \| null | 否 | 章节数，同上 |
 | `createdAt` | string | 是 | UTC ISO 8601 |
@@ -56,7 +56,7 @@ S1 范围（`docs/requirements.md:18` F09 首版只覆盖单门高数示范课�
 | `createdAt` | string | 是 | UTC ISO 8601 |
 | `updatedAt` | string | 是 | UTC ISO 8601 |
 
-> `classes` 表由 M5 写入、访问关系由 M1 维护（code-standards.md:88 把课程/班级访问规则划给 M1）。
+> `classes` 与选课、授课关系由 M5 维护。M1 负责选课 HTTP 入口与访问规则，通过 M5 的公开服务读写关系。
 > **course 不是 class**：同一门课程可开多个教学班，作业与提交的访问边界落到 `classId`。
 
 ## 资源：Chapter
@@ -206,21 +206,13 @@ S1 范围（`docs/requirements.md:18` F09 首版只覆盖单门高数示范课�
 
 ## 选课与班级 ACL
 
-> 选课 / 加入班级端点**不归 M5**。
+M1 提议由 `PUT /api/v1/classes/{classId}/enrollments/me` 处理学生入班，见 [候选契约及样例](../platform/enrollment-and-teacher-names.md#学生加入教学班)，待 M2、M5 评审。M1 验证会话与角色后调用 M5 的入班资格及关系服务。M5 维护唯一的 `enrollments` / `teaching_assignments` 关系，并为 M1 的课程权限检查提供查询。
 
-`courses` / `assignments` 列表返回「学生看到自己选的课 / 所在班级的作业」，
-但**选课（加入教学班）是访问关系写入**，属 M1 的鉴权与访问规则域
-（`docs/code-standards.md:88` 把课程/班级访问规则划给 M1）。
-
-- **M5 不实现选课端点**；M2 的「课程选择」入口调 M1 提供的接口。
-- M1 冻结选课端点路径后，本契约在此处同步引用，避免 M2 对一个未定义的目标实现。
-- 当前 M5 在 service 层调用 M1 的鉴权接口判定学生对 `classId` 的访问权（越权返回 404 防枚举）。
+`courses` / `assignments` 列表依据同一套关系裁剪，学生只能看到自己有权访问的课程或班级作业。资源不存在与无权访问统一返回 404。
 
 ## 不变量
 
-1. **学生只能看到已选或被授权的班级对应的课程。** `courses` / `classes` 表不存取 ACL，
-   授权关系由 M1 维护（code-standards.md:88 把课程/班级访问规则划给 M1）；
-   M5 在 service 层调用 M1 的鉴权接口判定。
+1. **学生只能看到已选或被授权的班级对应的课程。** M1 负责验证身份与授权边界，M5 依据选课、授课关系提供课程和班级访问查询。
 2. **章节的 `courseId` 必须存在且当前用户有权访问该课程。** 越权返回 404。
 3. **`order` ≥ 1，且同一课程内 `order` 唯一。** 删除章节不重排其余 `order`（避免并发改写）。
 4. **`coverImageUrl` 是不可信输入。** 文件名由上传者决定，展示前需净化
